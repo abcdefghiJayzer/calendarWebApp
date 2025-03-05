@@ -14,8 +14,18 @@ use App\Http\Controllers\CalendarController;
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
 
-Route::get('/', [CalendarController::class, 'index']);
+
+Route::get('/', [CalendarController::class, 'index'])->name('home');
+Route::get('/events', [CalendarController::class, 'getEvents'])->name('getEvents');
+
+Route::get('/create', [CalendarController::class, 'create'])->name('create');
+Route::post('/store', [CalendarController::class, 'store'])->name('store');
+
+Route::get('/events/{id}', [CalendarController::class, 'show'])->name('events.show');
+
+
+
+Route::get('/test', function () {
+    return 'Route is working!';
+});

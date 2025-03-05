@@ -6,9 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $title ?? 'Calendar' }}</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/calendar.js'])
-    @vite([])
+    @vite('resources/css/app.css')
+    @vite('resources/js/app.js')
 
+
+    @vite('resources/js/calendar.js')
+
+
+    <!-- <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script> -->
 
 </head>
 

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 @source "../views";
-import './calendar.js';
+
+.selected-event {
+    border: 2px solid black !important;
+    opacity: 0.8;
+}
 
 

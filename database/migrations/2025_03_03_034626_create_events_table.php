@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('location')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->boolean('is_all_day')->default(false);
+            
             $table->enum('status', ['pending', 'confirmed', 'cancelled'])->default('pending');
             $table->timestamps();
         });

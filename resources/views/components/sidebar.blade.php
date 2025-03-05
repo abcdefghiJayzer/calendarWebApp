@@ -8,13 +8,16 @@
 
         <div class="flex-grow p-4 space-y-2">
 
-            <button onclick="toggleModal(true)"
-                    class="block py-2 px-4 text-neutral-400 rounded-lg hover:bg-green-900 hover:text-white w-full text-left max">
-                + Create
-            </button>
 
-            <a href="/"
-               class="block py-2 px-4 text-white bg-green-900 rounded-lg hover:text-white">
+        <a href="{{ route('create') }}"
+                class="block py-2 px-4 text-white bg-green-900 rounded-lg hover:text-white">
+                Create Event
+            </a>
+
+
+
+            <a href="{{ route('home') }}"
+                class="block py-2 px-4 text-white bg-green-900 rounded-lg hover:text-white">
                 Home
             </a>
         </div>
