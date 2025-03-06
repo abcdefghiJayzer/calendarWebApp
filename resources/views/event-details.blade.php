@@ -13,5 +13,18 @@
     </div>
 
     <a href="{{ url('/') }}" class="mt-4 inline-block bg-blue-500 text-white px-4 py-2 rounded">Back to Calendar</a>
+
+    <a href="{{ route('edit', $event->id) }}" class="mt-4 inline-block bg-yellow-500 text-white px-4 py-2 rounded">
+        Edit Event
+    </a>
+
+
+
+    <div class="flex justify-end space-x-2">
+        <button type="submit"
+            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+            Delete
+        </button>
+    </div>
 </div>
 @endsection

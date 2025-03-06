@@ -91,7 +91,8 @@ class CalendarController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        $event = Event::findOrFail($id);
+        return view('edit', compact('event'));
     }
 
     /**
@@ -99,7 +100,27 @@ class CalendarController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        $event = Event::findOrFail($id);
+
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'location' => 'nullable|string|max:255',
+            'status' => 'required|string|in:pending,confirmed,cancelled',
+        ]);
+
+        $event->update([
+            'title' => $request->title,
+            'description' => $request->description,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'location' => $request->location,
+            'status' => $request->status,
+        ]);
+
+        return redirect()->route('home')->with('success', 'Event updated successfully!');
     }
 
     /**
