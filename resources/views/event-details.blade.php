@@ -8,23 +8,28 @@
     <div class="mt-4">
         <p><strong>Start Date:</strong> {{ \Carbon\Carbon::parse($event->start_date)->format('F d, Y - h:i A') }}</p>
         <p><strong>End Date:</strong> {{ \Carbon\Carbon::parse($event->end_date)->format('F d, Y - h:i A') }}</p>
-        <p><strong>Location:</strong> {{ $event->location }}</p>
+        <p><strong>Guests:</strong><p/>
+        @if ($event->participants && $event->participants->isNotEmpty())
+        <h3 class="font-semibold">Guests:</h3>
+        <ol class="list-disc ml-6">
+            @foreach ($event->participants as $guest)
+            <li>{{ $guest->email }}</li>
+            @endforeach
+        </ol>
+        @endif
+
+        <p class="mt-4"><strong>Location:</strong> {{ $event->location }}</p>
         <p><strong>Status:</strong> {{ ucfirst($event->status) }}</p>
     </div>
 
-    <a href="{{ url('/') }}" class="mt-4 inline-block bg-blue-500 text-white px-4 py-2 rounded">Back to Calendar</a>
+    <div class="mt-4 flex space-x-2">
+        <a href="{{ url('/') }}" class="inline-block bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+            Back to Calendar
+        </a>
 
-    <a href="{{ route('edit', $event->id) }}" class="mt-4 inline-block bg-yellow-500 text-white px-4 py-2 rounded">
-        Edit Event
-    </a>
-
-
-
-    <div class="flex justify-end space-x-2">
-        <button type="submit"
-            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-            Delete
-        </button>
+        <a href="{{ route('edit', $event->id) }}" class="inline-block bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+            Edit Event
+        </a>
     </div>
 </div>
 @endsection

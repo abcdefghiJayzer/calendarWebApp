@@ -18,13 +18,15 @@ use App\Http\Controllers\CalendarController;
 //shows calendar and fetch events to show in the calendcar
 Route::get('/', [CalendarController::class, 'index'])->name('home');
 Route::get('/events', [CalendarController::class, 'getEvents'])->name('getEvents');
+
+//shows event details
 Route::get('/events/{id}', [CalendarController::class, 'show'])->name('show');
 
-//
+//create event
 Route::get('/create', [CalendarController::class, 'create'])->name('create');
 Route::post('/store', [CalendarController::class, 'store'])->name('store');
 
-
+//edit event
 Route::get('/events/{id}/edit', [CalendarController::class, 'edit'])->name('edit');
 Route::put('/events/{id}', [CalendarController::class, 'update'])->name('update');
 
