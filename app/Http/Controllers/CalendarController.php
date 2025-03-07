@@ -89,10 +89,7 @@ class CalendarController extends Controller
         $guestEmails = json_decode($request->guests, true) ?? [];
 
         foreach ($guestEmails as $email) {
-            // Find or create the guest
             $guest = EventGuest::firstOrCreate(['email' => $email]);
-
-            // Associate the guest with the event
             $event->participants()->attach($guest->id);
         }
 
@@ -107,57 +104,65 @@ class CalendarController extends Controller
      */
     public function edit(string $id)
     {
-        $event = Event::with('participants')->findOrFail($id);
+        $event = Event::findOrFail($id);
         return view('edit', compact('event'));
     }
-
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, string $id)
     {
         $event = Event::findOrFail($id);
 
-        // Validate request data
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'guests' => 'nullable|json',
             'location' => 'nullable|string|max:255',
-            'color' => 'nullable|string',
+            'color' => 'required|string|max:20',
             'is_all_day' => 'boolean',
-            'guests' => 'nullable|string', // Assuming JSON array of emails
         ]);
 
-        // Update event data
-        $event->title = $request->title;
-        $event->description = $request->description;
-        $event->start_date = $request->start_date;
-        $event->end_date = $request->end_date;
-        $event->location = $request->location;
-        $event->color = $request->color;
-        $event->is_all_day = $request->is_all_day ? 1 : 0;
+        // Update event details
+        $event->update([
+            'title' => $request->title,
+            'description' => $request->description,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'location' => $request->location,
+            'color' => $request->color,
+            'is_all_day' => $request->is_all_day,
+        ]);
 
-        $event->save();
+        // Handle guests update
+        $guestEmails = json_decode($request->guests, true) ?? [];
 
-        // Update guests if needed
-        if ($request->guests) {
-            $emails = json_decode($request->guests, true);
+        if (!empty($guestEmails)) {
             $guestIds = [];
-            foreach ($emails as $email) {
-                $guest = EventGuest::firstOrCreate(['email' => $email]);
-                $guestIds[] = $guest->id;
+
+            foreach ($guestEmails as $email) {
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $guest = EventGuest::firstOrCreate(['email' => $email]);
+                    $guestIds[] = $guest->id;
+                }
             }
 
             $event->participants()->sync($guestIds);
+        } else {
+            $event->participants()->detach();
         }
 
-        return redirect()->route('edit', $event->id)->with('success', 'Event updated successfully');
+        return redirect()->route('home')->with('success', 'Event updated successfully!');
     }
 
 
+
+    /**
+     * Remove the specified resource from storage.
+     */
     public function destroy($id)
     {
         $event = Event::findOrFail($id);

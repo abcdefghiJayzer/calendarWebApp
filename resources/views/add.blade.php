@@ -8,7 +8,6 @@
         <form action="{{ route('store') }}" method="POST" class="space-y-4">
             @csrf
 
-            <!-- Event Color Selection -->
             <label for="color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
             <div class="flex space-x-3 mt-2">
                 @php
@@ -29,51 +28,45 @@
                 @endforeach
             </div>
 
-            <!-- Title -->
             <div>
                 <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
                 <input type="text" name="title" id="title" value="{{ old('title') }}" required
                     class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
             </div>
 
-            <!-- Description -->
             <div>
                 <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
                 <textarea name="description" id="description"
                     class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">{{ old('description') }}</textarea>
             </div>
 
-            <!-- Start Date -->
             <div>
                 <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
                 <input type="datetime-local" name="start_date" id="start_date" value="{{ old('start_date') }}" required
                     class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
             </div>
 
-            <!-- End Date -->
             <div>
                 <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
                 <input type="datetime-local" name="end_date" id="end_date" value="{{ old('end_date') }}"
                     class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
             </div>
 
-            <!-- Guests -->
             <div class="mb-4">
                 <label class="block text-gray-700">Add guests</label>
                 <div id="guest-container" class="flex flex-wrap gap-2 border p-2 rounded">
                     <input id="guest-input" type="email" class="outline-none border-none flex-grow p-1" placeholder="Type email and press Enter">
                 </div>
-                <input type="hidden" name="guests" id="guest-hidden" value="{{ old('guests', $event->guests ?? '[]') }}">
+
+                <input type="hidden" name="guests" id="guest-hidden" value="{{ old('guests', '[]') }}">
             </div>
 
-            <!-- Location -->
             <div>
                 <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
                 <input type="text" name="location" id="location" value="{{ old('location') }}"
                     class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
             </div>
 
-            <!-- All Day Event -->
             <div class="flex items-center">
                 <input type="hidden" name="is_all_day" value="0">
                 <input type="checkbox" name="is_all_day" id="is_all_day" value="1" {{ old('is_all_day') ? 'checked' : '' }}
@@ -81,7 +74,6 @@
                 <label for="is_all_day" class="ml-2 text-sm text-gray-700">All Day Event</label>
             </div>
 
-            <!-- Submit Button -->
             <div class="flex justify-end space-x-2">
                 <button type="submit"
                     class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -98,25 +90,19 @@
 
         colorOptions.forEach(option => {
             option.addEventListener("change", function() {
-                // Remove highlight from all options
                 document.querySelectorAll(".color-option").forEach(el => {
                     el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
                 });
-
-                // Add highlight to selected option
                 this.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
             });
         });
-    });
-</script>
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
         const guestInput = document.getElementById("guest-input");
         const guestContainer = document.getElementById("guest-container");
         const guestHidden = document.getElementById("guest-hidden");
+        const form = document.querySelector("form");
 
-        let guests = JSON.parse(guestHidden.value || "[]"); // Retrieve existing guests
+        let guests = JSON.parse(guestHidden.value || "[]");
 
         function updateHiddenInput() {
             guestHidden.value = JSON.stringify(guests);
@@ -140,7 +126,7 @@
             guestContainer.insertBefore(span, guestInput);
         }
 
-        guests.forEach(createGuestTag); // Load existing guests
+        guests.forEach(createGuestTag);
 
         guestInput.addEventListener("keydown", function(event) {
             if (event.key === "Enter" && guestInput.value.trim() !== "") {
@@ -151,7 +137,16 @@
                     createGuestTag(email);
                     updateHiddenInput();
                 }
-                guestInput.value = ""; // Clear input
+                guestInput.value = "";
+            }
+        });
+
+        form.addEventListener("submit", function(event) {
+            const email = guestInput.value.trim();
+            if (email !== "" && !guests.includes(email)) {
+                guests.push(email);
+                createGuestTag(email);
+                updateHiddenInput();
             }
         });
     });
