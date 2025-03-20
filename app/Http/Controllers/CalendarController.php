@@ -81,37 +81,54 @@ class CalendarController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'title' => 'required|string|min:1', // Ensure title is not empty or just whitespace
-            'description' => 'nullable|string',
-            'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-            'location' => 'nullable|string',
-            'color' => 'required|string',
-            'guests' => 'nullable|string',
-            'is_all_day' => 'nullable|boolean',
-        ]);
+        try {
+            $request->validate([
+                'title' => 'required|string|min:1',
+                'description' => 'nullable|string',
+                'start_date' => 'required|date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
+                'location' => 'nullable|string',
+                'color' => 'required|string',
+                'guests' => 'nullable|string', // JSON string of guest emails
+                'is_all_day' => 'nullable|boolean',
+            ]);
 
-        $event = Event::create([
-            'title' => $request->title,
-            'description' => $request->description,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'location' => $request->location,
-            'user_id' => auth()->id(),
-            'is_all_day' => $request->is_all_day ?? false,
-            'status' => $request->status ?? 'pending',
-            'color' => $request->color,
-        ]);
+            $event = Event::create([
+                'title' => $request->title,
+                'description' => $request->description,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'location' => $request->location,
+                'user_id' => auth()->id(),
+                'is_all_day' => $request->is_all_day ?? false,
+                'status' => $request->status ?? 'pending',
+                'color' => $request->color,
+            ]);
 
-        $guestEmails = json_decode($request->guests, true) ?? [];
+            // Handle guests
+            $guestEmails = json_decode($request->guests, true) ?? [];
 
-        foreach ($guestEmails as $email) {
-            $guest = EventGuest::firstOrCreate(['email' => $email]);
-            $event->participants()->attach($guest->id);
+            foreach ($guestEmails as $email) {
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $guest = EventGuest::firstOrCreate(['email' => $email]);
+                    $event->participants()->attach($guest->id);
+                }
+            }
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => true, 'message' => 'Event created successfully']);
+            }
+
+            return redirect()->route('home')->with('success', 'Event created successfully!');
+        } catch (\Exception $e) {
+            \Log::error('Event creation error: ' . $e->getMessage());
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+            }
+
+            return redirect()->back()->with('error', 'Failed to create event: ' . $e->getMessage());
         }
-
-        return redirect()->route('home')->with('success', 'Event created successfully!');
     }
 
 

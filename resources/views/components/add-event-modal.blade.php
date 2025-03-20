@@ -94,43 +94,54 @@
 </div>
 
 <script>
+    let guests = []; // Move guests array to global scope
+
     function openModal() {
         document.getElementById('add-event-modal').classList.remove('hidden');
     }
 
     function closeModal() {
         document.getElementById('add-event-modal').classList.add('hidden');
+        // Reset form and guests when closing
+        document.getElementById('add-event-form').reset();
+        guests = [];
+        document.getElementById('guest-hidden').value = '[]';
+        // Remove all guest tags
+        const guestContainer = document.getElementById('guest-container');
+        const guestInput = document.getElementById('guest-input');
+        Array.from(guestContainer.children).forEach(child => {
+            if (child !== guestInput) child.remove();
+        });
     }
 
-    document.getElementById('add-event-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
+    function updateHiddenInput() {
+        document.getElementById('guest-hidden').value = JSON.stringify(guests);
+    }
 
-        try {
-            const response = await fetch('{{ route('store') }}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                });
+    function createGuestTag(email) {
+        const guestContainer = document.getElementById('guest-container');
+        const guestInput = document.getElementById('guest-input');
 
-            if (response.ok) {
-                closeModal();
-                window.location.href = '/OJT/calendarWebApp/';  // Updated redirect URL
-            }
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    });
+        const span = document.createElement("span");
+        span.className = "px-2 py-1 bg-gray-200 rounded text-sm flex items-center";
+        span.textContent = email;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.innerHTML = "&times;";
+        removeBtn.className = "ml-2 text-red-500 hover:text-red-700";
+        removeBtn.onclick = function() {
+            guests = guests.filter(g => g !== email);
+            span.remove();
+            updateHiddenInput();
+        };
+
+        span.appendChild(removeBtn);
+        guestContainer.insertBefore(span, guestInput);
+    }
 
     document.addEventListener("DOMContentLoaded", function() {
         const colorOptions = document.querySelectorAll(".color-option input");
         const guestInput = document.getElementById("guest-input");
-        const guestContainer = document.getElementById("guest-container");
-        const guestHidden = document.getElementById("guest-hidden");
-        const form = document.getElementById("add-event-form");
-        let guests = [];
 
         colorOptions.forEach(option => {
             option.addEventListener("change", function() {
@@ -141,42 +152,67 @@
             });
         });
 
-        function updateHiddenInput() {
-            guestHidden.value = JSON.stringify(guests);
-        }
-
-        function createGuestTag(email) {
-            const span = document.createElement("span");
-            span.className = "px-2 py-1 bg-gray-200 rounded text-sm flex items-center";
-            span.textContent = email;
-
-            const removeBtn = document.createElement("button");
-            removeBtn.innerHTML = "&times;";
-            removeBtn.className = "ml-2 text-red-500 hover:text-red-700";
-            removeBtn.onclick = function() {
-                guests = guests.filter(g => g !== email);
-                span.remove();
-                updateHiddenInput();
-            };
-
-            span.appendChild(removeBtn);
-            guestContainer.insertBefore(span, guestInput);
-        }
-
         guestInput.addEventListener("keydown", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
                 const email = guestInput.value.trim();
                 if (email !== "") {
-                    if (!guests.includes(email)) {
-                        guests.push(email);
-                        createGuestTag(email);
-                        updateHiddenInput();
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (emailRegex.test(email)) {
+                        if (!guests.includes(email)) {
+                            guests.push(email);
+                            createGuestTag(email);
+                            updateHiddenInput();
+                        }
+                        guestInput.value = "";
+                        guestInput.classList.remove('border-red-500');
+                    } else {
+                        guestInput.classList.add('border-red-500');
+                        alert('Please enter a valid email address');
                     }
-                    guestInput.value = "";
                 }
             }
         });
+    });
+
+    document.getElementById('add-event-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        // Handle any pending guest input
+        const emailInput = document.getElementById('guest-input');
+        const email = emailInput.value.trim();
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(email) && !guests.includes(email)) {
+                guests.push(email);
+                createGuestTag(email);
+                updateHiddenInput();
+                emailInput.value = "";
+            }
+        }
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch('{{ route('store') }}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            if (response.ok) {
+                closeModal();
+                window.location.href = '/OJT/calendarWebApp/';
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Failed to create event');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while creating the event');
+        }
     });
 
     // Replace existing click outside handler with this one
