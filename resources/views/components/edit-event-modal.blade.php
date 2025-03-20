@@ -198,7 +198,10 @@ document.getElementById('edit-event-form').querySelectorAll('input:not(#edit-gue
 });
 
 // Add form submit handler for pending email input
-document.getElementById('edit-event-form').addEventListener('submit', function(e) {
+document.getElementById('edit-event-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Handle pending email input first
     const emailInput = document.getElementById('edit-guest-input');
     const email = emailInput.value.trim();
     if (email) {
@@ -210,35 +213,82 @@ document.getElementById('edit-event-form').addEventListener('submit', function(e
             emailInput.value = "";
         }
     }
-    e.preventDefault();
+
     const eventId = document.getElementById('edit-event-id').value;
-    const form = this;
+    const formData = new FormData(this);
 
-    // Convert the form to FormData
-    const formData = new FormData(form);
+    try {
+        // Check for guest scheduling conflicts
+        if (editGuests.length > 0) {
+            const startDate = document.getElementById('edit-start-date').value;
+            const endDate = document.getElementById('edit-end-date').value || startDate;
 
-    // Send the update request
-    fetch(`/OJT/calendarWebApp/events/${eventId}`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            const checkData = new URLSearchParams();
+            checkData.append('guests', JSON.stringify(editGuests));
+            checkData.append('start_date', startDate);
+            checkData.append('end_date', endDate);
+            checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+            checkData.append('event_id', eventId); // Add event ID to exclude current event from conflict check
+
+            const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+                method: 'POST',
+                body: checkData,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+
+            const conflictResult = await checkResponse.json();
+
+            if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+                const result = await Swal.fire({
+                    title: 'Schedule Conflict Detected',
+                    html: `The following guests already have events during this time:<br><strong>${conflictResult.conflicts.join(', ')}</strong>`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#22c55e',
+                    cancelButtonColor: '#ef4444',
+                    confirmButtonText: 'Update anyway',
+                    cancelButtonText: 'Cancel'
+                });
+
+                if (!result.isConfirmed) {
+                    return; // Return without closing modal
+                }
+            }
         }
-    })
-    .then(response => {
+
+        // Proceed with event update
+        const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
         if (response.ok) {
             closeEditModal();
             location.reload();
-            return;
+        } else {
+            const errorData = await response.json();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: errorData.message || 'Failed to update event',
+                confirmButtonColor: '#22c55e'
+            });
         }
-        return response.text().then(text => {
-            throw new Error(text);
-        });
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error updating event:', error);
-        alert('Failed to update event. Please check console for details.');
-    });
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Failed to update event. Please try again.',
+            confirmButtonColor: '#22c55e'
+        });
+    }
 });
 
 document.querySelectorAll(".edit-color-option input").forEach(option => {
