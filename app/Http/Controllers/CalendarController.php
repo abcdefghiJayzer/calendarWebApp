@@ -68,22 +68,27 @@ class CalendarController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'title' => 'required|string|min:1', // Ensure title is not empty or just whitespace
+            'description' => 'nullable|string',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'location' => 'nullable|string',
+            'color' => 'required|string',
+            'guests' => 'nullable|string',
+            'is_all_day' => 'nullable|boolean',
+        ]);
+
         $event = Event::create([
             'title' => $request->title,
             'description' => $request->description,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-
-
             'location' => $request->location,
             'user_id' => auth()->id(),
             'is_all_day' => $request->is_all_day ?? false,
             'status' => $request->status ?? 'pending',
-            'color' => $request->color, // Save selected color
-
-
-
-
+            'color' => $request->color,
         ]);
 
         $guestEmails = json_decode($request->guests, true) ?? [];

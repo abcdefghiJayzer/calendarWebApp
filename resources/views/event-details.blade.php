@@ -8,7 +8,7 @@
     <div class="mt-4">
         <p><strong>Start Date:</strong> {{ \Carbon\Carbon::parse($event->start_date)->format('F d, Y - h:i A') }}</p>
         <p><strong>End Date:</strong> {{ \Carbon\Carbon::parse($event->end_date)->format('F d, Y - h:i A') }}</p>
-        <p><strong>Guests:</strong><p/>
+        <p><strong>Guests:</strong></p>
         @if ($event->participants && $event->participants->isNotEmpty())
         <h3 class="font-semibold">Guests:</h3>
         <ol class="list-disc ml-6">
@@ -20,6 +20,7 @@
 
         <p class="mt-4"><strong>Location:</strong> {{ $event->location }}</p>
         <p><strong>Status:</strong> {{ ucfirst($event->status) }}</p>
+        <p><strong>All Day Event:</strong> {{ $event->is_all_day ? 'Yes' : 'No' }}</p>
     </div>
 
     <div class="mt-4 flex space-x-2">

@@ -129,15 +129,19 @@
         guests.forEach(createGuestTag);
 
         guestInput.addEventListener("keydown", function(event) {
-            if (event.key === "Enter" && guestInput.value.trim() !== "") {
+            if (event.key === "Enter") {
                 event.preventDefault();
                 const email = guestInput.value.trim();
-                if (!guests.includes(email)) {
-                    guests.push(email);
-                    createGuestTag(email);
-                    updateHiddenInput();
+                if (email !== "") {
+                    if (!guests.includes(email)) {
+                        guests.push(email);
+                        createGuestTag(email);
+                        updateHiddenInput();
+                    }
+                    guestInput.value = "";
+                } else {
+                    alert("Please enter a valid email address.");
                 }
-                guestInput.value = "";
             }
         });
 

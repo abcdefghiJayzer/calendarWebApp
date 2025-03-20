@@ -126,27 +126,51 @@
             guestContainer.insertBefore(span, guestInput);
         }
 
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
         guests.forEach(createGuestTag);
 
         guestInput.addEventListener("keydown", function(event) {
             if (event.key === "Enter" && guestInput.value.trim() !== "") {
                 event.preventDefault();
                 const email = guestInput.value.trim();
-                if (!guests.includes(email)) {
-                    guests.push(email);
-                    createGuestTag(email);
-                    updateHiddenInput();
+                if (isValidEmail(email)) {
+                    guestInput.setCustomValidity("");
+                    if (!guests.includes(email)) {
+                        guests.push(email);
+                        createGuestTag(email);
+                        updateHiddenInput();
+                    }
+                    guestInput.value = "";
+                    guestInput.classList.remove('border-red-500');
+                } else {
+                    guestInput.setCustomValidity("Please enter a valid email address.");
+                    guestInput.reportValidity();
+                    guestInput.classList.add('border-red-500');
                 }
-                guestInput.value = "";
             }
         });
 
         form.addEventListener("submit", function(event) {
             const email = guestInput.value.trim();
-            if (email !== "" && !guests.includes(email)) {
-                guests.push(email);
-                createGuestTag(email);
-                updateHiddenInput();
+            if (email !== "") {
+                if (isValidEmail(email)) {
+                    guestInput.setCustomValidity("");
+                    if (!guests.includes(email)) {
+                        guests.push(email);
+                        createGuestTag(email);
+                        updateHiddenInput();
+                    }
+                    guestInput.classList.remove('border-red-500');
+                } else {
+                    guestInput.setCustomValidity("Please correct the invalid email before submitting.");
+                    guestInput.reportValidity();
+                    event.preventDefault();
+                    guestInput.classList.add('border-red-500');
+                }
             }
         });
     });
