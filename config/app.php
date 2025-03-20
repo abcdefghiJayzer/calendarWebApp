@@ -185,4 +185,9 @@ return [
         // 'Example' => App\Facades\Example::class,
     ])->toArray(),
 
+    'google_calendar' => [
+        'api_key' => env('GOOGLE_CALENDAR_API_KEY'),
+        'calendar_id' => env('GOOGLE_CALENDAR_ID'),
+    ],
+
 ];

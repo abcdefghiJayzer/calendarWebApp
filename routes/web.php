@@ -3,36 +3,25 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CalendarController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
-
-
-//shows calendar and fetch events to show in the calendcar
+// Shows calendar and fetch events
 Route::get('/', [CalendarController::class, 'index'])->name('home');
 Route::get('/events', [CalendarController::class, 'getEvents'])->name('getEvents');
 
-//shows event details
+// Show event details
 Route::get('/events/{id}', [CalendarController::class, 'show'])->name('show');
 
-//create event
+// Create event
 Route::get('/create', [CalendarController::class, 'create'])->name('create');
 Route::post('/store', [CalendarController::class, 'store'])->name('store');
 
-//edit event
-Route::get('/events/{id}/edit', [CalendarController::class, 'edit'])->name('edit');
+// Edit/Update event
 Route::put('/events/{id}', [CalendarController::class, 'update'])->name('update');
+Route::post('/events/{id}', [CalendarController::class, 'update']); // Handle POST requests with _method=PUT
 
+// Delete event
+Route::delete('/events/{id}', [CalendarController::class, 'destroy'])->name('destroy');
 
-
-
+// Test route
 Route::get('/test', function () {
     return 'Route is working!';
 });

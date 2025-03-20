@@ -7,14 +7,10 @@
         </div>
 
         <div class="flex-grow p-4 space-y-2">
-
-
-        <a href="{{ route('create') }}"
-                class="block py-2 px-4 text-white bg-green-900 rounded-lg hover:text-white">
+            <button onclick="openModal()"
+                class="block w-full py-2 px-4 text-white bg-green-900 rounded-lg hover:bg-green-700">
                 Create Event
-            </a>
-
-
+            </button>
 
             <a href="{{ route('home') }}"
                 class="block py-2 px-4 text-white bg-green-900 rounded-lg hover:text-white">
