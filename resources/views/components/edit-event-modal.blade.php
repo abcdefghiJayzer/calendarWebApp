@@ -250,8 +250,13 @@ document.querySelectorAll(".edit-color-option input").forEach(option => {
     });
 });
 
-// Click outside handler
+// Replace the click outside handler
 document.addEventListener('mousedown', function(event) {
+    // Don't close if SweetAlert is visible
+    if (document.querySelector('.swal2-container')) {
+        return;
+    }
+
     const modal = document.getElementById('edit-event-modal');
     const modalContent = modal.querySelector('.relative.bg-white');
 

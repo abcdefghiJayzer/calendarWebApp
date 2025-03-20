@@ -221,6 +221,45 @@ class CalendarController extends Controller
         $event->delete();
         return redirect()->route('home')->with('success', 'Event deleted successfully!');
     }
+
+    public function checkGuestConflicts(Request $request)
+    {
+        $request->validate([
+            'guests' => 'required|json',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $guests = json_decode($request->guests, true);
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+
+        $conflictingGuests = [];
+
+        foreach ($guests as $email) {
+            $guest = EventGuest::where('email', $email)->first();
+            if ($guest) {
+                // Check for overlapping events
+                $hasConflict = $guest->events()
+                    ->where(function($query) use ($startDate, $endDate) {
+                        $query->whereBetween('start_date', [$startDate, $endDate])
+                            ->orWhereBetween('end_date', [$startDate, $endDate])
+                            ->orWhere(function($q) use ($startDate, $endDate) {
+                                $q->where('start_date', '<=', $startDate)
+                                  ->where('end_date', '>=', $endDate);
+                            });
+                    })->exists();
+
+                if ($hasConflict) {
+                    $conflictingGuests[] = $email;
+                }
+            }
+        }
+
+        return response()->json([
+            'conflicts' => $conflictingGuests
+        ]);
+    }
 }
 
 

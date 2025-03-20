@@ -21,6 +21,9 @@ Route::post('/events/{id}', [CalendarController::class, 'update']); // Handle PO
 // Delete event
 Route::delete('/events/{id}', [CalendarController::class, 'destroy'])->name('destroy');
 
+// Check for guest conflicts
+Route::post('/check-conflicts', [CalendarController::class, 'checkGuestConflicts'])->name('checkGuestConflicts');
+
 // Test route
 Route::get('/test', function () {
     return 'Route is working!';

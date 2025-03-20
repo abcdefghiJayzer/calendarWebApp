@@ -183,17 +183,69 @@
         const email = emailInput.value.trim();
         if (email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (emailRegex.test(email) && !guests.includes(email)) {
-                guests.push(email);
-                createGuestTag(email);
-                updateHiddenInput();
+            if (emailRegex.test(email)) {
+                if (!guests.includes(email)) {
+                    guests.push(email);
+                    createGuestTag(email);
+                    updateHiddenInput();
+                }
                 emailInput.value = "";
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Email',
+                    text: 'Please enter a valid email address',
+                    confirmButtonColor: '#22c55e'
+                });
+                return;
             }
         }
 
         const formData = new FormData(this);
 
         try {
+            // Check for guest scheduling conflicts
+            const guestsToCheck = guests;
+            if (guestsToCheck.length > 0) {
+                const startDate = document.getElementById('start_date').value;
+                const endDate = document.getElementById('end_date').value || startDate;
+
+                const checkData = new URLSearchParams();
+                checkData.append('guests', JSON.stringify(guestsToCheck));
+                checkData.append('start_date', startDate);
+                checkData.append('end_date', endDate);
+                checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+
+                const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+                    method: 'POST',
+                    body: checkData,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
+
+                const conflictResult = await checkResponse.json();
+
+                if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+                    const result = await Swal.fire({
+                        title: 'Schedule Conflict Detected',
+                        html: `The following guests already have events during this time:<br><strong>${conflictResult.conflicts.join(', ')}</strong>`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#22c55e',
+                        cancelButtonColor: '#ef4444',
+                        confirmButtonText: 'Add anyway',
+                        cancelButtonText: 'Cancel'
+                    });
+
+                    if (!result.isConfirmed) {
+                        return; // Just return without closing the modal
+                    }
+                }
+            }
+
+            // Proceed with event creation
             const response = await fetch('{{ route('store') }}', {
                 method: 'POST',
                 body: formData,
@@ -207,16 +259,31 @@
                 window.location.href = '/OJT/calendarWebApp/';
             } else {
                 const errorData = await response.json();
-                alert(errorData.message || 'Failed to create event');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: errorData.message || 'Failed to create event',
+                    confirmButtonColor: '#22c55e'
+                });
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('An error occurred while creating the event');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'An error occurred while creating the event',
+                confirmButtonColor: '#22c55e'
+            });
         }
     });
 
-    // Replace existing click outside handler with this one
+    // Replace the click outside handler with this updated version
     document.addEventListener('mousedown', function(event) {
+        // Don't close if SweetAlert is visible
+        if (document.querySelector('.swal2-container')) {
+            return;
+        }
+
         const modal = document.getElementById('add-event-modal');
         const modalContent = modal.querySelector('.relative.bg-white');
 

@@ -104,6 +104,11 @@
 
     // Add click outside handler after existing code
     document.addEventListener('mousedown', function(event) {
+        // Don't close if SweetAlert is visible
+        if (document.querySelector('.swal2-container')) {
+            return;
+        }
+
         const modal = document.getElementById('event-details-modal');
         const modalContent = modal.querySelector('.relative.bg-white');
 

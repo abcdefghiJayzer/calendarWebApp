@@ -4,6 +4,9 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import googleCalendarPlugin from '@fullcalendar/google-calendar';
+import Swal from 'sweetalert2';
+
+window.Swal = Swal; // Make it available globally
 
 document.addEventListener('DOMContentLoaded', function () {
     var calendarEl = document.getElementById('calendar');
