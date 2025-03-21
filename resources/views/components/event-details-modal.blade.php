@@ -69,49 +69,46 @@
 
     function editEvent() {
         if (!currentEventId) return;
-        // Get current event data and open edit modal
         fetch(`/OJT/calendarWebApp/events/${currentEventId}`)
             .then(response => response.json())
             .then(data => {
                 openEditModal(data);
+                closeEventModal();
             })
             .catch(error => console.error('Error:', error));
-
-        closeEventModal();
     }
 
     async function deleteEvent() {
-        if (!currentEventId || !confirm('Are you sure you want to delete this event?')) return;
+        if (!currentEventId) return;
 
-        try {
-            await fetch(`/OJT/calendarWebApp/events/${currentEventId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            });
+        const result = await Swal.fire({
+            title: 'Are you sure?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#22c55e',
+            cancelButtonColor: '#ef4444',
+            confirmButtonText: 'Yes, delete it!'
+        });
 
-            // Always close modal and refresh the page
+        if (result.isConfirmed) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/OJT/calendarWebApp/events/${currentEventId}`;
+            form.innerHTML = `
+                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                <input type="hidden" name="_method" value="DELETE">
+            `;
+            document.body.appendChild(form);
             closeEventModal();
-            location.reload();
-
-        } catch (error) {
-            console.error('Error:', error);
-            closeEventModal();
-            location.reload();
+            form.submit();
         }
     }
 
-    // Add click outside handler after existing code
     document.addEventListener('mousedown', function(event) {
-        // Don't close if SweetAlert is visible
-        if (document.querySelector('.swal2-container')) {
-            return;
-        }
-
+        if (document.querySelector('.swal2-container')) return;
         const modal = document.getElementById('event-details-modal');
         const modalContent = modal.querySelector('.relative.bg-white');
-
         if (modal && !modal.classList.contains('hidden') && !modalContent.contains(event.target)) {
             closeEventModal();
         }

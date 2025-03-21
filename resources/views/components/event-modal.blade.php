@@ -1,4 +1,4 @@
-<div id="edit-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden transition-opacity duration-300 ease-in-out">
+<div id="edit-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden">
     <div onclick="closeEditModal()" class="fixed inset-0 bg-black/60"></div>
 
     <div class="relative min-h-screen flex items-center justify-center p-4">
@@ -13,24 +13,24 @@
             </div>
 
             <form id="edit-event-form" class="space-y-4">
-                @csrf
-                @method('PUT')
+                <?php echo csrf_field(); ?>
+                <?php echo method_field('PUT'); ?>
                 <input type="hidden" id="edit-event-id" name="id">
 
                 <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
                 <div class="flex space-x-3 mt-2">
-                    @foreach([
+                    <?php $__currentLoopData = [
                     '#3b82f6' => 'bg-blue-500',
                     '#ef4444' => 'bg-red-500',
                     '#eab308' => 'bg-yellow-500',
                     '#22c55e' => 'bg-green-500',
                     '#000000' => 'bg-black'
-                    ] as $hex => $bg)
-                    <label class="cursor-pointer edit-color-option rounded-full" data-color="{{ $hex }}">
-                        <input type="radio" name="color" value="{{ $hex }}" class="hidden">
-                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }}"></div>
+                    ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $hex => $bg): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                    <label class="cursor-pointer edit-color-option rounded-full" data-color="<?php echo e($hex); ?>">
+                        <input type="radio" name="color" value="<?php echo e($hex); ?>" class="hidden">
+                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 <?php echo e($bg); ?>"></div>
                     </label>
-                    @endforeach
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </div>
 
                 <div>
@@ -242,25 +242,9 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
             const conflictResult = await checkResponse.json();
 
             if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
-                let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
-
-                conflictResult.conflicts.forEach(conflict => {
-                    conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
-
-                    conflict.events.forEach(event => {
-                        const startDate = new Date(event.start).toLocaleString();
-                        const endDate = new Date(event.end).toLocaleString();
-                        conflictHtml += `- <b>${event.title}</b><br>`;
-                        conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
-                        conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
-                    });
-
-                    conflictHtml += '<br>';
-                });
-
                 const result = await Swal.fire({
                     title: 'Schedule Conflict Detected',
-                    html: conflictHtml,
+                    html: `The following guests already have events during this time:<br><strong>${conflictResult.conflicts.join(', ')}</strong>`,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#22c55e',
@@ -338,3 +322,4 @@ document.addEventListener('mousedown', function(event) {
     }
 }, true);
 </script>
+<?php /**PATH C:\xampp\htdocs\OJT\calendarWebApp\resources\views/components/edit-event-modal.blade.php ENDPATH**/ ?>

@@ -1,5 +1,5 @@
 <!-- Modal backdrop -->
-<div id="add-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden">
+<div id="add-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden transition-opacity duration-300 ease-in-out">
     <!-- Backdrop -->
     <div onclick="closeModal()" class="fixed inset-0 bg-black/60"></div>
 
@@ -94,7 +94,7 @@
 </div>
 
 <script>
-    let guests = []; // Move guests array to global scope
+    let guests = [];
 
     function openModal() {
         document.getElementById('add-event-modal').classList.remove('hidden');
@@ -102,11 +102,9 @@
 
     function closeModal() {
         document.getElementById('add-event-modal').classList.add('hidden');
-        // Reset form and guests when closing
         document.getElementById('add-event-form').reset();
         guests = [];
         document.getElementById('guest-hidden').value = '[]';
-        // Remove all guest tags
         const guestContainer = document.getElementById('guest-container');
         const guestInput = document.getElementById('guest-input');
         Array.from(guestContainer.children).forEach(child => {
@@ -205,13 +203,12 @@
 
         try {
             // Check for guest scheduling conflicts
-            const guestsToCheck = guests;
-            if (guestsToCheck.length > 0) {
+            if (guests.length > 0) {
                 const startDate = document.getElementById('start_date').value;
                 const endDate = document.getElementById('end_date').value || startDate;
 
                 const checkData = new URLSearchParams();
-                checkData.append('guests', JSON.stringify(guestsToCheck));
+                checkData.append('guests', JSON.stringify(guests));
                 checkData.append('start_date', startDate);
                 checkData.append('end_date', endDate);
                 checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
@@ -228,9 +225,25 @@
                 const conflictResult = await checkResponse.json();
 
                 if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+                    let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
+
+                    conflictResult.conflicts.forEach(conflict => {
+                        conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
+
+                        conflict.events.forEach(event => {
+                            const startDate = new Date(event.start).toLocaleString();
+                            const endDate = new Date(event.end).toLocaleString();
+                            conflictHtml += `- <b>${event.title}</b><br>`;
+                            conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
+                            conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
+                        });
+
+                        conflictHtml += '<br>';
+                    });
+
                     const result = await Swal.fire({
                         title: 'Schedule Conflict Detected',
-                        html: `The following guests already have events during this time:<br><strong>${conflictResult.conflicts.join(', ')}</strong>`,
+                        html: conflictHtml,
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonColor: '#22c55e',
@@ -256,7 +269,14 @@
 
             if (response.ok) {
                 closeModal();
-                window.location.href = '/OJT/calendarWebApp/';
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: 'Event added successfully!',
+                    confirmButtonColor: '#22c55e'
+                }).then(() => {
+                    window.location.href = '/OJT/calendarWebApp/';
+                });
             } else {
                 const errorData = await response.json();
                 Swal.fire({
@@ -277,9 +297,8 @@
         }
     });
 
-    // Replace the click outside handler with this updated version
+    // Click outside handler
     document.addEventListener('mousedown', function(event) {
-        // Don't close if SweetAlert is visible
         if (document.querySelector('.swal2-container')) {
             return;
         }

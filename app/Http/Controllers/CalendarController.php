@@ -228,20 +228,19 @@ class CalendarController extends Controller
             'guests' => 'required|json',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'event_id' => 'nullable|exists:events,id', // Add validation for event_id
+            'event_id' => 'nullable|exists:events,id',
         ]);
 
         $guests = json_decode($request->guests, true);
         $startDate = $request->start_date;
         $endDate = $request->end_date;
-        $eventId = $request->event_id; // Get the event ID if provided
+        $eventId = $request->event_id;
 
         $conflictingGuests = [];
 
         foreach ($guests as $email) {
             $guest = EventGuest::where('email', $email)->first();
             if ($guest) {
-                // Check for overlapping events, excluding the current event if editing
                 $query = $guest->events()
                     ->where(function($query) use ($startDate, $endDate) {
                         $query->whereBetween('start_date', [$startDate, $endDate])
@@ -252,13 +251,17 @@ class CalendarController extends Controller
                             });
                     });
 
-                // Exclude current event if event_id is provided
                 if ($eventId) {
                     $query->where('events.id', '!=', $eventId);
                 }
 
-                if ($query->exists()) {
-                    $conflictingGuests[] = $email;
+                $conflictingEvents = $query->get(['title', 'start_date as start', 'end_date as end']);
+
+                if ($conflictingEvents->isNotEmpty()) {
+                    $conflictingGuests[] = [
+                        'email' => $email,
+                        'events' => $conflictingEvents
+                    ];
                 }
             }
         }

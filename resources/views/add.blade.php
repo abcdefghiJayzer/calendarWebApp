@@ -131,27 +131,22 @@
         guestInput.addEventListener("keydown", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
-                const email = guestInput.value.trim();
-                if (email !== "") {
-                    if (!guests.includes(email)) {
-                        guests.push(email);
-                        createGuestTag(email);
-                        updateHiddenInput();
-                    }
-                    guestInput.value = "";
-                } else {
-                    alert("Please enter a valid email address.");
-                }
+                addGuest();
             }
         });
 
-        form.addEventListener("submit", function(event) {
+        function addGuest() {
             const email = guestInput.value.trim();
-            if (email !== "" && !guests.includes(email)) {
+            if (email && !guests.includes(email)) {
                 guests.push(email);
                 createGuestTag(email);
                 updateHiddenInput();
+                guestInput.value = "";
             }
+        }
+
+        form.addEventListener("submit", function(event) {
+            addGuest(); // Handle any pending guest input
         });
     });
 </script>
