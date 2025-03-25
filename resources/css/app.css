@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @source "../views";
 
+.fc-event {
+    cursor: pointer !important;
+}
+
+.gcal-event {
+    border: none !important;
+}
+
 .selected-event {
     border: 2px solid black !important;
     opacity: 0.8;

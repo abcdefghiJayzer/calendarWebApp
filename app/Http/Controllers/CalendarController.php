@@ -8,38 +8,17 @@ use App\Models\EventGuest;
 
 class CalendarController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
-
-
-        // Return the calendar view and pass events
         return view('calendar');
     }
-
 
     public function getEvents()
     {
         $events = Event::select('id', 'title', 'start_date as start', 'end_date as end', 'location', 'color as backgroundColor')
             ->get();
-
         return response()->json($events);
     }
-
-
-
-
-
-    /**
-     * Display the specified resource.
-     */
-    // public function show(string $id)
-    // {
-    //     $events = Event::all();
-    //     return response()->json($events);
-    // }
 
     public function show($id)
     {
@@ -64,21 +43,11 @@ class CalendarController extends Controller
         ]);
     }
 
-
-
-
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         return view('add');
     }
 
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         try {
@@ -131,21 +100,12 @@ class CalendarController extends Controller
         }
     }
 
-
-
-
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
         $event = Event::findOrFail($id);
         return view('edit', compact('event'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
         try {
@@ -210,11 +170,6 @@ class CalendarController extends Controller
         }
     }
 
-
-
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy($id)
     {
         $event = Event::findOrFail($id);

@@ -12,8 +12,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var calendarEl = document.getElementById('calendar');
 
     if (calendarEl) {
-        var eventsUrl = calendarEl.getAttribute('data-events-url');
-
         var calendar = new Calendar(calendarEl, {
             plugins: [
                 dayGridPlugin,
@@ -28,19 +26,33 @@ document.addEventListener('DOMContentLoaded', function () {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
             },
-            events: eventsUrl,
+            events: calendarEl.getAttribute('data-events-url'),
+            googleCalendarApiKey: calendarEl.getAttribute('data-api-key'),
+            eventSources: [{
+                googleCalendarId: calendarEl.getAttribute('data-calendar-id'),
+                className: 'gcal-event'
+            }],
+            eventDidMount: function(info) {
+                info.el.style.cursor = 'pointer';
+            },
             eventClick: function (info) {
-                if (info.event.url) {
-                    window.open(info.event.url, '_blank'); // Opens Google Calendar event links
-                    info.jsEvent.preventDefault();
-                } else {
-                    fetch(`/OJT/calendarWebApp/events/${info.event.id}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            openEventModal(data);
-                        })
-                        .catch(error => console.error('Error:', error));
-                }
+                info.jsEvent.preventDefault(); // Prevent default for all events
+
+                // Create event data object in the format expected by openEventModal
+                const eventData = {
+                    id: info.event.id,
+                    title: info.event.title,
+                    start: info.event.start,
+                    end: info.event.end,
+                    allDay: info.event.allDay,
+                    extendedProps: {
+                        description: info.event.extendedProps.description || 'Google Calendar Event',
+                        location: info.event.extendedProps.location || '',
+                        guests: info.event.extendedProps.guests || []
+                    }
+                };
+
+                openEventModal(eventData);
             }
         });
 
