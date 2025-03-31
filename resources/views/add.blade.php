@@ -74,6 +74,13 @@
                 <label for="is_all_day" class="ml-2 text-sm text-gray-700">All Day Event</label>
             </div>
 
+            <div class="flex items-center mt-2">
+                <input type="hidden" name="private" value="0">
+                <input type="checkbox" name="private" id="private" value="1" {{ old('private') ? 'checked' : '' }}
+                    class="text-green-600 focus:ring-green-500 rounded">
+                <label for="private" class="ml-2 text-sm text-gray-700">Private Event</label>
+            </div>
+
             <div class="flex justify-end space-x-2">
                 <button type="submit"
                     class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">

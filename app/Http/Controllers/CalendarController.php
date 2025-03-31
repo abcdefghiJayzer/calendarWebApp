@@ -18,17 +18,35 @@ class CalendarController extends Controller
         $events = Event::with('participants')
             ->select('id', 'title', 'start_date as start', 'end_date as end',
                     'location', 'color as backgroundColor', 'description', 'is_all_day as allDay',
-                    'calendar_type')
+                    'calendar_type', 'private', 'user_id')
             ->get()
             ->map(function($event) {
-                return array_merge($event->toArray(), [
-                    'extendedProps' => [
+                $data = $event->toArray();
+
+                // Hide details if event is private and user is not the owner
+                if ($event->private && $event->user_id !== auth()->id()) {
+                    $data['title'] = 'Private Event';
+                    $data['backgroundColor'] = '#808080'; // Grey color for private events
+                    $data['extendedProps'] = [
+                        'description' => 'Private event - Details hidden',
+                        'location' => null,
+                        'guests' => [],
+                        'calendarType' => $event->calendar_type,
+                        'private' => true,
+                        'user_id' => $event->user_id
+                    ];
+                } else {
+                    $data['extendedProps'] = [
                         'description' => $event->description,
                         'location' => $event->location,
                         'guests' => $event->participants->pluck('email'),
-                        'calendarType' => $event->calendar_type
-                    ]
-                ]);
+                        'calendarType' => $event->calendar_type,
+                        'private' => $event->private,
+                        'user_id' => $event->user_id
+                    ];
+                }
+
+                return $data;
             });
         return response()->json($events);
     }
@@ -47,11 +65,14 @@ class CalendarController extends Controller
             'start' => $event->start_date,
             'end' => $event->end_date,
             'allDay' => $event->is_all_day,
-            'backgroundColor' => $event->color, // Add this line
+            'backgroundColor' => $event->color,
             'extendedProps' => [
                 'description' => $event->description,
                 'location' => $event->location,
-                'guests' => $event->participants->pluck('email')
+                'guests' => $event->participants->pluck('email'),
+                'private' => $event->private,
+                'user_id' => $event->user_id,
+                'calendar_type' => $event->calendar_type
             ]
         ]);
     }
@@ -86,7 +107,8 @@ class CalendarController extends Controller
                 'is_all_day' => $request->is_all_day ?? false,
                 'status' => $request->status ?? 'pending',
                 'color' => $request->color,
-                'calendar_type' => $request->calendar_type,
+                'calendar_type' => $request->calendar_type ?? 'division',
+                'private' => $request->boolean('private'),
             ]);
 
             // Handle guests
@@ -151,6 +173,7 @@ class CalendarController extends Controller
                 'color' => $request->color,
                 'is_all_day' => $isAllDay,
                 'calendar_type' => $request->calendar_type,
+                'private' => $request->boolean('private'),
             ]);
 
             // Handle guests update

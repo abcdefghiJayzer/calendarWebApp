@@ -79,6 +79,13 @@
                     <label for="edit-is-all-day" class="ml-2 text-sm text-gray-700">All Day Event</label>
                 </div>
 
+                <div class="flex items-center mt-2">
+                    <input type="hidden" name="private" value="0">
+                    <input type="checkbox" name="private" id="private" value="1"
+                        class="text-green-600 focus:ring-green-500 rounded">
+                    <label for="private" class="ml-2 text-sm text-gray-700">Private Event</label>
+                </div>
+
                 <div class="flex justify-end space-x-2">
                     <button type="submit"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -98,9 +105,23 @@ function openEditModal(event) {
 
     document.getElementById('edit-event-modal').classList.remove('hidden');
     document.getElementById('edit-event-id').value = event.id;
-    document.getElementById('edit-title').value = event.title;
-    document.getElementById('edit-description').value = event.extendedProps.description || '';
-    document.getElementById('edit-location').value = event.extendedProps.location || '';
+
+    // Handle private event visibility
+    if (event.extendedProps.private && event.extendedProps.user_id !== {{ auth()->id() }}) {
+        document.getElementById('edit-title').value = 'Private Event';
+        document.getElementById('edit-description').value = '';
+        document.getElementById('edit-location').value = '';
+        document.getElementById('edit-guest-container').style.display = 'none';
+    } else {
+        document.getElementById('edit-title').value = event.title;
+        document.getElementById('edit-description').value = event.extendedProps.description || '';
+        document.getElementById('edit-location').value = event.extendedProps.location || '';
+        document.getElementById('edit-guest-container').style.display = 'block';
+
+        // Set private checkbox
+        document.getElementById('edit-private').checked = event.extendedProps.private || false;
+    }
+
     document.getElementById('edit-is-all-day').checked = event.allDay;
 
     // Set start and end dates

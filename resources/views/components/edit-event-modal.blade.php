@@ -16,12 +16,14 @@
                 <input type="hidden" id="edit-event-id" name="id">
 
                 <div class="mb-4">
-                    <label for="edit-calendar-type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <select name="calendar_type" id="edit-calendar-type" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
-                        <option value="institute">Institute Level</option>
-                        <option value="sectoral">Sectoral</option>
-                        <option value="division">Division</option>
-                    </select>
+                    <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
+                    <div class="border p-2 rounded">
+                        <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                            <option value="institute">Institute Level</option>
+                            <option value="sectoral">Sectoral</option>
+                            <option value="division">Division</option>
+                        </select>
+                    </div>
                 </div>
 
                 <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
@@ -98,6 +100,13 @@
                     <label for="edit-is-all-day" class="ml-2 text-sm text-gray-700">All Day Event</label>
                 </div>
 
+                <div class="flex items-center mt-2">
+                    <input type="hidden" name="private" value="0">
+                    <input type="checkbox" name="private" id="edit-private" value="1"
+                        class="text-green-600 focus:ring-green-500 rounded">
+                    <label for="edit-private" class="ml-2 text-sm text-gray-700">Private Event</label>
+                </div>
+
                 <div class="flex justify-end space-x-2">
                     <button type="submit"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -124,37 +133,39 @@ function openEditModal(event) {
     backdrop.onclick = closeEditModal;
     document.body.appendChild(backdrop);
 
-    // Prevent body scroll
     document.body.style.overflow = 'hidden';
 
-    console.log('Opening edit modal with event:', event);
-
+    // Set form fields
     document.getElementById('edit-event-id').value = event.id;
     document.getElementById('edit-title').value = event.title;
     document.getElementById('edit-description').value = event.extendedProps.description || '';
     document.getElementById('edit-location').value = event.extendedProps.location || '';
     document.getElementById('edit-is-all-day').checked = event.allDay;
+    document.getElementById('edit-private').checked = event.extendedProps.private || false;
 
     // Set calendar type
-    document.getElementById('edit-calendar-type').value = event.extendedProps.calendarType || 'institute';
+    const calendarType = event.extendedProps.calendar_type || 'division';
+    document.getElementById('edit-calendar_type').value = calendarType;
 
-    // Set start and end dates
+    // Fix date handling
     const startDate = new Date(event.start);
     const endDate = event.end ? new Date(event.end) : new Date(startDate);
-    document.getElementById('edit-start-date').value = startDate.toISOString().slice(0, 16);
-    document.getElementById('edit-end-date').value = endDate.toISOString().slice(0, 16);
 
-    // Set color with highlighting
-    const colorValue = event.backgroundColor || '#3b82f6';
-    const colorOption = document.querySelector(`.edit-color-option[data-color="${colorValue}"]`);
+    // Add timezone offset to compensate for local timezone
+    const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
+    const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
+
+    document.getElementById('edit-start-date').value = startLocal.toISOString().slice(0, 16);
+    document.getElementById('edit-end-date').value = endLocal.toISOString().slice(0, 16);
+
+    // Set color
+    const colorOption = document.querySelector(`.edit-color-option[data-color="${event.backgroundColor || '#3b82f6'}"]`);
     if (colorOption) {
         const colorInput = colorOption.querySelector('input');
         colorInput.checked = true;
-        // Clear previous highlights
         document.querySelectorAll(".edit-color-option").forEach(el => {
             el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
         });
-        // Add highlight to selected color
         colorOption.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
     }
 
@@ -164,12 +175,10 @@ function openEditModal(event) {
     const guestContainer = document.getElementById('edit-guest-container');
     const guestInput = document.getElementById('edit-guest-input');
 
-    // Clear existing guest tags
     Array.from(guestContainer.children).forEach(child => {
         if (child !== guestInput) child.remove();
     });
 
-    // Create guest tags
     editGuests.forEach(email => createEditGuestTag(email));
 }
 
@@ -184,7 +193,6 @@ function closeEditModal() {
         backdrop.remove();
     }
 
-    // Restore body scroll
     document.body.style.overflow = '';
 }
 
@@ -209,166 +217,169 @@ function createEditGuestTag(email) {
     container.insertBefore(span, input);
 }
 
-document.getElementById('edit-guest-input').addEventListener('keydown', function(event) {
-    if (event.key === "Enter") {
-        event.preventDefault(); // Only prevent default for the email input
-        const email = this.value.trim();
-        if (email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (emailRegex.test(email)) {
-                if (!editGuests.includes(email)) {
-                    editGuests.push(email);
-                    createEditGuestTag(email);
-                    document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
-                }
-                this.value = "";
-                this.classList.remove('border-red-500');
-            } else {
-                this.classList.add('border-red-500');
-                alert('Please enter a valid email address');
-            }
-        }
-    }
-});
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('edit-event-form');
+    const guestInput = document.getElementById('edit-guest-input');
 
-// Prevent form submission on Enter key in other inputs except the guest email input
-document.getElementById('edit-event-form').querySelectorAll('input:not(#edit-guest-input)').forEach(input => {
-    input.addEventListener('keydown', function(event) {
-        if (event.key === "Enter") {
-            event.preventDefault();
-        }
+    // Color option handling
+    document.querySelectorAll(".edit-color-option input").forEach(option => {
+        option.addEventListener("change", function() {
+            document.querySelectorAll(".edit-color-option").forEach(el => {
+                el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
+            });
+            this.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
+        });
     });
-});
 
-// Add form submit handler for pending email input
-document.getElementById('edit-event-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
+    // Prevent Enter key submission except for guest input
+    form.querySelectorAll('input:not(#edit-guest-input)').forEach(input => {
+        input.addEventListener('keydown', function(event) {
+            if (event.key === "Enter") event.preventDefault();
+        });
+    });
 
-    // Handle pending email input first
-    const emailInput = document.getElementById('edit-guest-input');
-    const email = emailInput.value.trim();
-    if (email) {
+    // Guest input handling
+    guestInput.addEventListener('keydown', async function(event) {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+
+        const email = this.value.trim();
+        if (!email) return;
+
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (emailRegex.test(email) && !editGuests.includes(email)) {
+        if (!emailRegex.test(email)) {
+            this.classList.add('border-red-500');
+            alert('Please enter a valid email address');
+            return;
+        }
+
+        if (!editGuests.includes(email)) {
             editGuests.push(email);
             createEditGuestTag(email);
             document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
-            emailInput.value = "";
         }
-    }
+        this.value = "";
+        this.classList.remove('border-red-500');
+    });
 
-    const eventId = document.getElementById('edit-event-id').value;
-    const formData = new FormData(this);
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-    try {
-        // Check for guest scheduling conflicts
-        if (editGuests.length > 0) {
-            const startDate = document.getElementById('edit-start-date').value;
-            const endDate = document.getElementById('edit-end-date').value || startDate;
+        // Handle pending email input first
+        const emailInput = document.getElementById('edit-guest-input');
+        const email = emailInput.value.trim();
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(email) && !editGuests.includes(email)) {
+                editGuests.push(email);
+                createEditGuestTag(email);
+                document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
+                emailInput.value = "";
+            }
+        }
 
-            const checkData = new URLSearchParams();
-            checkData.append('guests', JSON.stringify(editGuests));
-            checkData.append('start_date', startDate);
-            checkData.append('end_date', endDate);
-            checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
-            checkData.append('event_id', eventId); // Add event ID to exclude current event from conflict check
+        const eventId = document.getElementById('edit-event-id').value;
+        const formData = new FormData(this);
 
-            const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+        try {
+            // Check for guest scheduling conflicts
+            if (editGuests.length > 0) {
+                const startDate = document.getElementById('edit-start-date').value;
+                const endDate = document.getElementById('edit-end-date').value || startDate;
+
+                const checkData = new URLSearchParams();
+                checkData.append('guests', JSON.stringify(editGuests));
+                checkData.append('start_date', startDate);
+                checkData.append('end_date', endDate);
+                checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+                checkData.append('event_id', eventId);
+
+                const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+                    method: 'POST',
+                    body: checkData,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
+
+                const conflictResult = await checkResponse.json();
+
+                if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
+                    let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
+
+                    conflictResult.conflicts.forEach(conflict => {
+                        conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
+
+                        conflict.events.forEach(event => {
+                            const startDate = new Date(event.start).toLocaleString();
+                            const endDate = new Date(event.end).toLocaleString();
+                            conflictHtml += `- <b>${event.title}</b><br>`;
+                            conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
+                            conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
+                        });
+                    });
+
+                    const result = await Swal.fire({
+                        title: 'Schedule Conflict Detected',
+                        html: conflictHtml,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#22c55e',
+                        cancelButtonColor: '#ef4444',
+                        confirmButtonText: 'Update anyway',
+                        cancelButtonText: 'Cancel'
+                    });
+
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+                }
+            }
+
+            // Proceed with event update
+            const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
                 method: 'POST',
-                body: checkData,
+                body: formData,
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
 
-            const conflictResult = await checkResponse.json();
-
-            if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
-                let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
-
-                conflictResult.conflicts.forEach(conflict => {
-                    conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
-
-                    conflict.events.forEach(event => {
-                        const startDate = new Date(event.start).toLocaleString();
-                        const endDate = new Date(event.end).toLocaleString();
-                        conflictHtml += `- <b>${event.title}</b><br>`;
-                        conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
-                        conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
-                    });
-
-                    conflictHtml += '<br>';
+            if (response.ok) {
+                closeEditModal();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: 'Event updated successfully!',
+                    confirmButtonColor: '#22c55e'
+                }).then(() => {
+                    location.reload();
                 });
-
-                const result = await Swal.fire({
-                    title: 'Schedule Conflict Detected',
-                    html: conflictHtml,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#22c55e',
-                    cancelButtonColor: '#ef4444',
-                    confirmButtonText: 'Update anyway',
-                    cancelButtonText: 'Cancel'
+            } else {
+                const errorData = await response.json();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: errorData.message || 'Failed to update event',
+                    confirmButtonColor: '#22c55e'
                 });
-
-                if (!result.isConfirmed) {
-                    return; // Return without closing modal
-                }
             }
-        }
-
-        // Proceed with event update
-        const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            }
-        });
-
-        if (response.ok) {
-            closeEditModal();
-            Swal.fire({
-                icon: 'success',
-                title: 'Success',
-                text: 'Event updated successfully!',
-                confirmButtonColor: '#22c55e'
-            }).then(() => {
-                location.reload();
-            });
-        } else {
-            const errorData = await response.json();
+        } catch (error) {
+            console.error('Error updating event:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: errorData.message || 'Failed to update event',
+                text: 'Failed to update event. Please try again.',
                 confirmButtonColor: '#22c55e'
             });
         }
-    } catch (error) {
-        console.error('Error updating event:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Failed to update event. Please try again.',
-            confirmButtonColor: '#22c55e'
-        });
-    }
-});
-
-document.querySelectorAll(".edit-color-option input").forEach(option => {
-    option.addEventListener("change", function() {
-        document.querySelectorAll(".edit-color-option").forEach(el => {
-            el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
-        });
-        this.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
     });
 });
 
 // Replace the click outside handler
 document.addEventListener('mousedown', function(event) {
-    // Don't close if SweetAlert is visible
     if (document.querySelector('.swal2-container')) {
         return;
     }
@@ -381,3 +392,4 @@ document.addEventListener('mousedown', function(event) {
     }
 }, true);
 </script>
+

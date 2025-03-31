@@ -10,6 +10,10 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Initialize Swal globally
+        window.Swal = Swal;
+    </script>
 </head>
 
 <body>

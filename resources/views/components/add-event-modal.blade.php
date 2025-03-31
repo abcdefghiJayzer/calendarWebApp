@@ -1,6 +1,4 @@
-<!-- Right Sidebar -->
 <div id="add-event-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
-    <!-- Content -->
     <div class="h-full bg-white shadow-xl shadow-black/10">
         <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
             <div class="flex justify-between items-center mb-4">
@@ -12,24 +10,11 @@
                 </button>
             </div>
 
-            <form id="add-event-form" class="space-y-4">
+            <form id="add-event-form" action="{{ route('store') }}" method="POST" class="space-y-4">
                 @csrf
-                <div class="mb-4">
-                    <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <select name="calendar_type" id="calendar_type" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
-                        <option value="">Select Calendar</option>
-                        <option value="institute">Institute Level</option>
-                        <option value="sectoral">Sectoral</option>
-                        <option value="division">Division</option>
-                    </select>
-                </div>
 
-                <label for="color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
+                <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
                 <div class="flex space-x-3 mt-2">
-                    @php
-                    $selectedColor = old('color', '#3b82f6'); // Default to blue
-                    @endphp
-
                     @foreach([
                     '#3b82f6' => 'bg-blue-500',
                     '#ef4444' => 'bg-red-500',
@@ -37,18 +22,28 @@
                     '#22c55e' => 'bg-green-500',
                     '#000000' => 'bg-black'
                     ] as $hex => $bg)
-                    <label class="cursor-pointer color-option rounded-full {{ $selectedColor == $hex ? 'ring-4 ring-offset-2 ring-blue-300' : '' }}" data-color="{{ $hex }}">
-                        <input type="radio" name="color" value="{{ $hex }}" class="hidden" {{ $selectedColor == $hex ? 'checked' : '' }}>
-                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }}"></div>
+                    <label class="cursor-pointer color-option rounded-full" data-color="{{ $hex }}">
+                        <input type="radio" name="color" value="{{ $hex }}" {{ $hex === '#3b82f6' ? 'checked' : '' }} class="hidden">
+                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} {{ $hex === '#3b82f6' ? 'ring-4 ring-offset-2 ring-blue-300' : '' }}"></div>
                     </label>
                     @endforeach
+                </div>
+
+                <div class="mb-4">
+                    <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
+                    <div class="border p-2 rounded">
+                        <select name="calendar_type" id="calendar_type" required class="outline-none border-none w-full">
+                            <option value="institute">Institute Level</option>
+                            <option value="sectoral">Sectoral</option>
+                            <option value="division" selected>Division</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
                     <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
                     <div class="border p-2 rounded">
-                        <input type="text" name="title" id="title" required
-                            class="outline-none border-none w-full">
+                        <input type="text" name="title" id="title" required class="outline-none border-none w-full">
                     </div>
                 </div>
 
@@ -101,6 +96,13 @@
                     <label for="is_all_day" class="ml-2 text-sm text-gray-700">All Day Event</label>
                 </div>
 
+                <div class="flex items-center mt-2">
+                    <input type="hidden" name="private" value="0">
+                    <input type="checkbox" name="private" id="private" value="1"
+                        class="text-green-600 focus:ring-green-500 rounded">
+                    <label for="private" class="ml-2 text-sm text-gray-700">Private Event</label>
+                </div>
+
                 <div class="flex justify-end space-x-2">
                     <button type="submit"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
@@ -116,27 +118,32 @@
     let guests = [];
 
     function openModal() {
-        document.getElementById('add-event-modal').classList.remove('translate-x-full');
+        const modal = document.getElementById('add-event-modal');
+        modal.classList.remove('translate-x-full');
         document.getElementById('calendar-container').classList.add('mr-120');
+
         // Add backdrop
         const backdrop = document.createElement('div');
-        backdrop.id = 'modal-backdrop';
+        backdrop.id = 'add-backdrop';
         backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
         backdrop.onclick = closeModal;
         document.body.appendChild(backdrop);
+
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
-        setTimeout(() => window.calendar?.updateSize(), 300); // After transition
     }
 
     function closeModal() {
-        document.getElementById('add-event-modal').classList.add('translate-x-full');
+        const modal = document.getElementById('add-event-modal');
+        modal.classList.add('translate-x-full');
         document.getElementById('calendar-container').classList.remove('mr-120');
+
         // Remove backdrop
-        const backdrop = document.getElementById('modal-backdrop');
+        const backdrop = document.getElementById('add-backdrop');
         if (backdrop) {
             backdrop.remove();
         }
+
         // Restore body scroll
         document.body.style.overflow = '';
         document.getElementById('add-event-form').reset();
@@ -175,6 +182,13 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
+        // Initialize first color option as selected
+        const firstColorOption = document.querySelector(".color-option input");
+        if (firstColorOption) {
+            firstColorOption.checked = true;
+            firstColorOption.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
+        }
+
         const colorOptions = document.querySelectorAll(".color-option input");
         const guestInput = document.getElementById("guest-input");
 
@@ -213,32 +227,32 @@
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        // Handle any pending guest input
-        const emailInput = document.getElementById('guest-input');
-        const email = emailInput.value.trim();
-        if (email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (emailRegex.test(email)) {
-                if (!guests.includes(email)) {
-                    guests.push(email);
-                    createGuestTag(email);
-                    updateHiddenInput();
-                }
-                emailInput.value = "";
-            } else {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Invalid Email',
-                    text: 'Please enter a valid email address',
-                    confirmButtonColor: '#22c55e'
-                });
-                return;
-            }
-        }
-
-        const formData = new FormData(this);
-
         try {
+            // Handle any pending guest input
+            const emailInput = document.getElementById('guest-input');
+            const email = emailInput.value.trim();
+            if (email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (emailRegex.test(email)) {
+                    if (!guests.includes(email)) {
+                        guests.push(email);
+                        createGuestTag(email);
+                        updateHiddenInput();
+                    }
+                    emailInput.value = "";
+                } else {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Email',
+                        text: 'Please enter a valid email address',
+                        confirmButtonColor: '#22c55e'
+                    });
+                    return;
+                }
+            }
+
+            const formData = new FormData(this);
+
             // Check for guest scheduling conflicts
             if (guests.length > 0) {
                 const startDate = document.getElementById('start_date').value;
@@ -296,39 +310,48 @@
             }
 
             // Proceed with event creation
-            const response = await fetch('{{ route('store') }}', {
+            const response = await fetch(this.getAttribute('action'), {
                 method: 'POST',
                 body: formData,
                 headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
 
+            let responseData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json();
+            } else {
+                // Handle non-JSON response
+                responseData = {
+                    success: response.ok,
+                    message: response.ok ? 'Event created successfully!' : 'Failed to create event'
+                };
+            }
+
             if (response.ok) {
-                closeModal();
-                Swal.fire({
+                await Swal.fire({
                     icon: 'success',
                     title: 'Success',
-                    text: 'Event added successfully!',
+                    text: responseData.message || 'Event created successfully!',
                     confirmButtonColor: '#22c55e'
-                }).then(() => {
-                    window.location.href = '/OJT/calendarWebApp/';
                 });
+
+                closeModal();
+                window.location.reload();
             } else {
-                const errorData = await response.json();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: errorData.message || 'Failed to create event',
-                    confirmButtonColor: '#22c55e'
-                });x
+                throw new Error(responseData.message || 'Failed to create event');
             }
+
         } catch (error) {
             console.error('Error:', error);
-            Swal.fire({
+            await Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: 'An error occurred while creating the event',
+                text: error.message || 'An error occurred while creating the event',
                 confirmButtonColor: '#22c55e'
             });
         }

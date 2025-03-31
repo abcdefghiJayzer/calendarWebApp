@@ -19,7 +19,8 @@ class Event extends Model
         'is_all_day',
         'color',
         'status',
-        'calendar_type'
+        'calendar_type',
+        'private'  // Add this line
     ];
 
     // In App\Models\Event.php

@@ -30,10 +30,15 @@ document.addEventListener('DOMContentLoaded', function () {
             googleCalendarApiKey: calendarEl.getAttribute('data-api-key'),
             eventSources: [{
                 googleCalendarId: calendarEl.getAttribute('data-calendar-id'),
-                className: 'gcal-event'
             }],
             eventDidMount: function(info) {
-                info.el.style.cursor = 'pointer';
+                // Apply filter settings when events are mounted
+                const savedFilters = localStorage.getItem('calendarFilters')
+                    ? JSON.parse(localStorage.getItem('calendarFilters'))
+                    : ['institute', 'sectoral', 'division'];
+
+                const shouldShow = savedFilters.includes(info.event.extendedProps.calendarType);
+                info.event.setProp('display', shouldShow ? 'auto' : 'none');
             },
             eventClick: function (info) {
                 info.jsEvent.preventDefault(); // Prevent default for all events
@@ -46,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     end: info.event.end,
                     allDay: info.event.allDay,
                     extendedProps: {
-                        description: info.event.extendedProps.description || 'Google Calendar Event',
+                        description: info.event.extendedProps.description || '',  // Changed from 'Google Calendar Event' to empty string
                         location: info.event.extendedProps.location || '',
                         guests: info.event.extendedProps.guests || []
                     }
@@ -56,10 +61,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        window.calendar = calendar; // Make calendar globally accessible
         calendar.render();
-
-        // Make calendar instance globally available
-        window.calendar = calendar;
 
         // Add resize observer to handle container width changes
         const resizeObserver = new ResizeObserver(() => {
