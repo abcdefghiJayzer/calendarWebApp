@@ -3,7 +3,7 @@
 @vite(['resources/js/app.js'])
 
 @section('content')
-<div class="">
+<div class="transition-all duration-300 ease-in-out w-full" id="calendar-container">
     <div id="calendar"
         data-events-url="{{ route('getEvents') }}"
         data-api-key="{{ config('services.google.calendar.api_key') }}"

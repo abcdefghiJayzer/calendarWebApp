@@ -18,7 +18,8 @@ class Event extends Model
         'user_id',
         'is_all_day',
         'color',
-        'status'
+        'status',
+        'calendar_type'
     ];
 
     // In App\Models\Event.php

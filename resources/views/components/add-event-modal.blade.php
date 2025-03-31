@@ -1,11 +1,8 @@
-<!-- Modal backdrop -->
-<div id="add-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden transition-opacity duration-300 ease-in-out">
-    <!-- Backdrop -->
-    <div onclick="closeModal()" class="fixed inset-0 bg-black/60"></div>
-
-    <!-- Modal panel -->
-    <div class="relative min-h-screen flex items-center justify-center p-4">
-        <div class="relative bg-white rounded-lg p-6 w-full max-w-lg shadow-xl transform transition-all">
+<!-- Right Sidebar -->
+<div id="add-event-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
+    <!-- Content -->
+    <div class="h-full bg-white shadow-xl shadow-black/10">
+        <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Create Event</h2>
                 <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
@@ -17,6 +14,16 @@
 
             <form id="add-event-form" class="space-y-4">
                 @csrf
+                <div class="mb-4">
+                    <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
+                    <select name="calendar_type" id="calendar_type" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                        <option value="">Select Calendar</option>
+                        <option value="institute">Institute Level</option>
+                        <option value="sectoral">Sectoral</option>
+                        <option value="division">Division</option>
+                    </select>
+                </div>
+
                 <label for="color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
                 <div class="flex space-x-3 mt-2">
                     @php
@@ -39,26 +46,36 @@
 
                 <div>
                     <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-                    <input type="text" name="title" id="title" required
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div class="border p-2 rounded">
+                        <input type="text" name="title" id="title" required
+                            class="outline-none border-none w-full">
+                    </div>
                 </div>
 
                 <div>
                     <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea name="description" id="description"
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500"></textarea>
+                    <div class="border p-2 rounded">
+                        <textarea name="description" id="description"
+                            class="outline-none border-none w-full"></textarea>
+                    </div>
                 </div>
 
-                <div>
-                    <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                    <input type="datetime-local" name="start_date" id="start_date" required
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
-                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                        <div class="border p-2 rounded">
+                            <input type="datetime-local" name="start_date" id="start_date" required
+                                class="outline-none border-none w-full">
+                        </div>
+                    </div>
 
-                <div>
-                    <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
-                    <input type="datetime-local" name="end_date" id="end_date"
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
+                        <div class="border p-2 rounded">
+                            <input type="datetime-local" name="end_date" id="end_date"
+                                class="outline-none border-none w-full">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mb-4">
@@ -71,8 +88,10 @@
 
                 <div>
                     <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
-                    <input type="text" name="location" id="location"
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div class="border p-2 rounded">
+                        <input type="text" name="location" id="location"
+                            class="outline-none border-none w-full">
+                    </div>
                 </div>
 
                 <div class="flex items-center">
@@ -97,11 +116,29 @@
     let guests = [];
 
     function openModal() {
-        document.getElementById('add-event-modal').classList.remove('hidden');
+        document.getElementById('add-event-modal').classList.remove('translate-x-full');
+        document.getElementById('calendar-container').classList.add('mr-120');
+        // Add backdrop
+        const backdrop = document.createElement('div');
+        backdrop.id = 'modal-backdrop';
+        backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+        backdrop.onclick = closeModal;
+        document.body.appendChild(backdrop);
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => window.calendar?.updateSize(), 300); // After transition
     }
 
     function closeModal() {
-        document.getElementById('add-event-modal').classList.add('hidden');
+        document.getElementById('add-event-modal').classList.add('translate-x-full');
+        document.getElementById('calendar-container').classList.remove('mr-120');
+        // Remove backdrop
+        const backdrop = document.getElementById('modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+        // Restore body scroll
+        document.body.style.overflow = '';
         document.getElementById('add-event-form').reset();
         guests = [];
         document.getElementById('guest-hidden').value = '[]';
@@ -284,7 +321,7 @@
                     title: 'Error',
                     text: errorData.message || 'Failed to create event',
                     confirmButtonColor: '#22c55e'
-                });
+                });x
             }
         } catch (error) {
             console.error('Error:', error);
@@ -304,9 +341,9 @@
         }
 
         const modal = document.getElementById('add-event-modal');
-        const modalContent = modal.querySelector('.relative.bg-white');
+        const modalContent = modal.querySelector('.h-full.bg-white');
 
-        if (modal && !modal.classList.contains('hidden') && !modalContent.contains(event.target)) {
+        if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
             closeModal();
         }
     }, true);

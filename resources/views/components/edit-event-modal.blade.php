@@ -1,8 +1,6 @@
-<div id="edit-event-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden transition-opacity duration-300 ease-in-out">
-    <div onclick="closeEditModal()" class="fixed inset-0 bg-black/60"></div>
-
-    <div class="relative min-h-screen flex items-center justify-center p-4">
-        <div class="relative bg-white rounded-lg p-6 w-full max-w-lg shadow-xl transform transition-all">
+<div id="edit-event-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
+    <div class="h-full bg-white shadow-xl shadow-black/10">
+        <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Edit Event</h2>
                 <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700">
@@ -16,6 +14,15 @@
                 @csrf
                 @method('PUT')
                 <input type="hidden" id="edit-event-id" name="id">
+
+                <div class="mb-4">
+                    <label for="edit-calendar-type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
+                    <select name="calendar_type" id="edit-calendar-type" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                        <option value="institute">Institute Level</option>
+                        <option value="sectoral">Sectoral</option>
+                        <option value="division">Division</option>
+                    </select>
+                </div>
 
                 <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
                 <div class="flex space-x-3 mt-2">
@@ -35,26 +42,36 @@
 
                 <div>
                     <label for="edit-title" class="block text-sm font-medium text-gray-700">Title</label>
-                    <input type="text" name="title" id="edit-title" required
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div class="border p-2 rounded">
+                        <input type="text" name="title" id="edit-title" required
+                            class="outline-none border-none w-full">
+                    </div>
                 </div>
 
                 <div>
                     <label for="edit-description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea name="description" id="edit-description"
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500"></textarea>
+                    <div class="border p-2 rounded">
+                        <textarea name="description" id="edit-description"
+                            class="outline-none border-none w-full"></textarea>
+                    </div>
                 </div>
 
-                <div>
-                    <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                    <input type="datetime-local" name="start_date" id="edit-start-date" required
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
-                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                        <div class="border p-2 rounded">
+                            <input type="datetime-local" name="start_date" id="edit-start-date" required
+                                class="outline-none border-none w-full">
+                        </div>
+                    </div>
 
-                <div>
-                    <label for="edit-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
-                    <input type="datetime-local" name="end_date" id="edit-end-date" required
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div>
+                        <label for="edit-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
+                        <div class="border p-2 rounded">
+                            <input type="datetime-local" name="end_date" id="edit-end-date" required
+                                class="outline-none border-none w-full">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mb-4">
@@ -68,8 +85,10 @@
 
                 <div>
                     <label for="edit-location" class="block text-sm font-medium text-gray-700">Location</label>
-                    <input type="text" name="location" id="edit-location"
-                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                    <div class="border p-2 rounded">
+                        <input type="text" name="location" id="edit-location"
+                            class="outline-none border-none w-full">
+                    </div>
                 </div>
 
                 <div class="flex items-center">
@@ -94,27 +113,40 @@
 let editGuests = [];
 
 function openEditModal(event) {
+    const modal = document.getElementById('edit-event-modal');
+    modal.classList.remove('translate-x-full');
+    document.getElementById('calendar-container').classList.add('mr-120');
+
+    // Add backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'edit-backdrop';
+    backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+    backdrop.onclick = closeEditModal;
+    document.body.appendChild(backdrop);
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+
     console.log('Opening edit modal with event:', event);
 
-    document.getElementById('edit-event-modal').classList.remove('hidden');
     document.getElementById('edit-event-id').value = event.id;
     document.getElementById('edit-title').value = event.title;
     document.getElementById('edit-description').value = event.extendedProps.description || '';
     document.getElementById('edit-location').value = event.extendedProps.location || '';
     document.getElementById('edit-is-all-day').checked = event.allDay;
 
+    // Set calendar type
+    document.getElementById('edit-calendar-type').value = event.extendedProps.calendarType || 'institute';
+
     // Set start and end dates
     const startDate = new Date(event.start);
     const endDate = event.end ? new Date(event.end) : new Date(startDate);
-
     document.getElementById('edit-start-date').value = startDate.toISOString().slice(0, 16);
     document.getElementById('edit-end-date').value = endDate.toISOString().slice(0, 16);
 
     // Set color with highlighting
-    console.log('Event background color:', event.backgroundColor);
     const colorValue = event.backgroundColor || '#3b82f6';
     const colorOption = document.querySelector(`.edit-color-option[data-color="${colorValue}"]`);
-
     if (colorOption) {
         const colorInput = colorOption.querySelector('input');
         colorInput.checked = true;
@@ -142,7 +174,18 @@ function openEditModal(event) {
 }
 
 function closeEditModal() {
-    document.getElementById('edit-event-modal').classList.add('hidden');
+    const modal = document.getElementById('edit-event-modal');
+    modal.classList.add('translate-x-full');
+    document.getElementById('calendar-container').classList.remove('mr-120');
+
+    // Remove backdrop
+    const backdrop = document.getElementById('edit-backdrop');
+    if (backdrop) {
+        backdrop.remove();
+    }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
 }
 
 function createEditGuestTag(email) {
@@ -331,9 +374,9 @@ document.addEventListener('mousedown', function(event) {
     }
 
     const modal = document.getElementById('edit-event-modal');
-    const modalContent = modal.querySelector('.relative.bg-white');
+    const modalContent = modal.querySelector('.h-full.bg-white');
 
-    if (modal && !modal.classList.contains('hidden') && !modalContent.contains(event.target)) {
+    if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
         closeEditModal();
     }
 }, true);

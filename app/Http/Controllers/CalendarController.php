@@ -15,8 +15,21 @@ class CalendarController extends Controller
 
     public function getEvents()
     {
-        $events = Event::select('id', 'title', 'start_date as start', 'end_date as end', 'location', 'color as backgroundColor')
-            ->get();
+        $events = Event::with('participants')
+            ->select('id', 'title', 'start_date as start', 'end_date as end',
+                    'location', 'color as backgroundColor', 'description', 'is_all_day as allDay',
+                    'calendar_type')
+            ->get()
+            ->map(function($event) {
+                return array_merge($event->toArray(), [
+                    'extendedProps' => [
+                        'description' => $event->description,
+                        'location' => $event->location,
+                        'guests' => $event->participants->pluck('email'),
+                        'calendarType' => $event->calendar_type
+                    ]
+                ]);
+            });
         return response()->json($events);
     }
 
@@ -60,6 +73,7 @@ class CalendarController extends Controller
                 'color' => 'required|string',
                 'guests' => 'nullable|string', // JSON string of guest emails
                 'is_all_day' => 'nullable|boolean',
+                'calendar_type' => 'required|in:institute,sectoral,division',
             ]);
 
             $event = Event::create([
@@ -72,6 +86,7 @@ class CalendarController extends Controller
                 'is_all_day' => $request->is_all_day ?? false,
                 'status' => $request->status ?? 'pending',
                 'color' => $request->color,
+                'calendar_type' => $request->calendar_type,
             ]);
 
             // Handle guests
@@ -120,6 +135,7 @@ class CalendarController extends Controller
                 'location' => 'nullable|string|max:255',
                 'color' => 'required|string|max:20',
                 'is_all_day' => 'boolean',
+                'calendar_type' => 'required|in:institute,sectoral,division',
             ]);
 
             // Properly handle the is_all_day checkbox (might come as "0", "1", true, false, or not be present)
@@ -134,6 +150,7 @@ class CalendarController extends Controller
                 'location' => $request->location,
                 'color' => $request->color,
                 'is_all_day' => $isAllDay,
+                'calendar_type' => $request->calendar_type,
             ]);
 
             // Handle guests update

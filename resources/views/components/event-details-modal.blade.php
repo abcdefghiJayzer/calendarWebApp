@@ -1,10 +1,6 @@
-<div id="event-details-modal" class="fixed inset-0 z-[999] overflow-y-auto hidden">
-    <!-- Backdrop -->
-    <div onclick="closeEventModal()" class="fixed inset-0 bg-black/60"></div>
-
-    <!-- Modal content -->
-    <div class="relative min-h-screen flex items-center justify-center p-4">
-        <div class="relative bg-white rounded-lg p-6 w-full max-w-lg shadow-xl transform transition-all">
+<div id="event-details-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
+    <div class="h-full bg-white shadow-xl shadow-black/10">
+        <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
             <div class="flex justify-between items-center mb-4">
                 <h2 id="event-title" class="text-xl font-bold"></h2>
                 <button onclick="closeEventModal()" class="text-gray-500 hover:text-gray-700">
@@ -36,6 +32,19 @@
     function openEventModal(event) {
         currentEventId = event.id;
         const modal = document.getElementById('event-details-modal');
+        modal.classList.remove('translate-x-full');
+        document.getElementById('calendar-container').classList.add('mr-120');
+
+        // Add backdrop
+        const backdrop = document.createElement('div');
+        backdrop.id = 'details-backdrop';
+        backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+        backdrop.onclick = closeEventModal;
+        document.body.appendChild(backdrop);
+
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+
         const title = document.getElementById('event-title');
         const content = document.getElementById('event-content');
 
@@ -58,12 +67,21 @@
                 </ul>
             </div>` : ''}
         `;
-
-        modal.classList.remove('hidden');
     }
 
     function closeEventModal() {
-        document.getElementById('event-details-modal').classList.add('hidden');
+        const modal = document.getElementById('event-details-modal');
+        modal.classList.add('translate-x-full');
+        document.getElementById('calendar-container').classList.remove('mr-120');
+
+        // Remove backdrop
+        const backdrop = document.getElementById('details-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+
+        // Restore body scroll
+        document.body.style.overflow = '';
         currentEventId = null;
     }
 
@@ -72,8 +90,17 @@
         fetch(`/OJT/calendarWebApp/events/${currentEventId}`)
             .then(response => response.json())
             .then(data => {
+                // First open edit modal, then close details modal
                 openEditModal(data);
-                closeEventModal();
+                // Remove backdrop and modal without affecting calendar container
+                const modal = document.getElementById('event-details-modal');
+                modal.classList.add('translate-x-full');
+                const backdrop = document.getElementById('details-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                document.body.style.overflow = '';
+                currentEventId = null;
             })
             .catch(error => console.error('Error:', error));
     }
@@ -108,8 +135,8 @@
     document.addEventListener('mousedown', function(event) {
         if (document.querySelector('.swal2-container')) return;
         const modal = document.getElementById('event-details-modal');
-        const modalContent = modal.querySelector('.relative.bg-white');
-        if (modal && !modal.classList.contains('hidden') && !modalContent.contains(event.target)) {
+        const modalContent = modal.querySelector('.h-full.bg-white');
+        if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
             closeEventModal();
         }
     }, true);

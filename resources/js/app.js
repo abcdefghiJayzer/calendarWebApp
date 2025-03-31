@@ -57,6 +57,16 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         calendar.render();
+
+        // Make calendar instance globally available
+        window.calendar = calendar;
+
+        // Add resize observer to handle container width changes
+        const resizeObserver = new ResizeObserver(() => {
+            calendar.updateSize();
+        });
+
+        resizeObserver.observe(document.getElementById('calendar-container'));
     } else {
         console.error('Calendar element not found.');
     }

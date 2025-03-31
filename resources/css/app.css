@@ -14,4 +14,21 @@
     opacity: 0.8;
 }
 
+/* Add custom width class */
+.mr-120 {
+    margin-right: 30rem; /* 480px - matches w-120 */
+    width: calc(100% - 30rem) !important;
+}
+
+#calendar-container {
+    width: 100%;
+    transition: width 0.3s ease-in-out;
+}
+
+#calendar {
+    width: 100% !important;
+    height: 96vh !important;  /* Fixed height */
+    transition: width 0.3s ease-in-out;
+}
+
 
