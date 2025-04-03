@@ -26,6 +26,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
             },
+            dateClick: function(info) {
+                const startDate = new Date(info.date);
+                const endDate = new Date(info.date);
+                endDate.setHours(startDate.getHours() + 1); // Set end date 1 hour after start
+                openModal(startDate, endDate);
+            },
             events: calendarEl.getAttribute('data-events-url'),
             googleCalendarApiKey: calendarEl.getAttribute('data-api-key'),
             eventSources: [{

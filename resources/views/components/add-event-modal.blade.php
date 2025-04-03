@@ -117,10 +117,22 @@
 <script>
     let guests = [];
 
-    function openModal() {
+    function openModal(startDate = null, endDate = null) {
         const modal = document.getElementById('add-event-modal');
         modal.classList.remove('translate-x-full');
         document.getElementById('calendar-container').classList.add('mr-120');
+
+        if (startDate) {
+            const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
+            document.getElementById('start_date').value = startLocal.toISOString().slice(0, 16);
+
+            if (endDate) {
+                const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
+                document.getElementById('end_date').value = endLocal.toISOString().slice(0, 16);
+            } else {
+                document.getElementById('end_date').value = startLocal.toISOString().slice(0, 16);
+            }
+        }
 
         // Add backdrop
         const backdrop = document.createElement('div');
