@@ -5,22 +5,51 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Event;
 use App\Models\EventGuest;
+use App\Services\GoogleCalendarService;
 
 class CalendarController extends Controller
 {
+    protected $googleCalendarService;
+
+    public function __construct(GoogleCalendarService $googleCalendarService)
+    {
+        $this->googleCalendarService = $googleCalendarService;
+    }
+
     public function index(Request $request)
     {
-        return view('calendar');
+        $googleApiKey = config('services.google.calendar.api_key');
+        $googleCalendarId = config('services.google.calendar.calendar_id');
+        $isGoogleAuthenticated = $this->googleCalendarService->isAuthenticated();
+
+        // Log Google Calendar settings for debugging
+        \Log::info('Google Calendar settings', [
+            'api_key' => $googleApiKey ? 'Set' : 'Not set',
+            'calendar_id' => $googleCalendarId,
+            'oauth_authenticated' => $isGoogleAuthenticated
+        ]);
+
+        return view('calendar', compact('googleApiKey', 'googleCalendarId', 'isGoogleAuthenticated'));
     }
 
     public function getEvents()
     {
         $events = Event::with('participants')
-            ->select('id', 'title', 'start_date as start', 'end_date as end',
-                    'location', 'color as backgroundColor', 'description', 'is_all_day as allDay',
-                    'calendar_type', 'private', 'user_id')
+            ->select(
+                'id',
+                'title',
+                'start_date as start',
+                'end_date as end',
+                'location',
+                'color as backgroundColor',
+                'description',
+                'is_all_day as allDay',
+                'calendar_type',
+                'private',
+                'user_id'
+            )
             ->get()
-            ->map(function($event) {
+            ->map(function ($event) {
                 $data = $event->toArray();
 
                 // Hide details if event is private and user is not the owner
@@ -56,7 +85,7 @@ class CalendarController extends Controller
         $event = Event::with('participants')->find($id);
 
         if (!$event) {
-            abort(404);
+            return response()->json(['error' => 'Event not found'], 404);
         }
 
         return response()->json([
@@ -237,12 +266,12 @@ class CalendarController extends Controller
             $guest = EventGuest::where('email', $email)->first();
             if ($guest) {
                 $query = $guest->events()
-                    ->where(function($query) use ($startDate, $endDate) {
+                    ->where(function ($query) use ($startDate, $endDate) {
                         $query->whereBetween('start_date', [$startDate, $endDate])
                             ->orWhereBetween('end_date', [$startDate, $endDate])
-                            ->orWhere(function($q) use ($startDate, $endDate) {
+                            ->orWhere(function ($q) use ($startDate, $endDate) {
                                 $q->where('start_date', '<=', $startDate)
-                                  ->where('end_date', '>=', $endDate);
+                                    ->where('end_date', '>=', $endDate);
                             });
                     });
 
@@ -265,7 +294,123 @@ class CalendarController extends Controller
             'conflicts' => $conflictingGuests
         ]);
     }
+
+    public function storeGoogleEvent(Request $request)
+    {
+        try {
+            $request->validate([
+                'title' => 'required|string|min:1',
+                'description' => 'nullable|string',
+                'start_date' => 'required|date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
+                'location' => 'nullable|string',
+                'color' => 'required|string',
+                'guests' => 'nullable|string',
+            ]);
+
+            $data = [
+                'title' => $request->title,
+                'description' => $request->description,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date ?: $request->start_date,
+                'location' => $request->location,
+                'color' => $request->color,
+                'guests' => json_decode($request->guests, true) ?? [],
+            ];
+
+            // CREATE EVENT ON GOOGLE
+            $googleEvent = $this->googleCalendarService->createEvent($data);
+
+            // Save to local DB with google_event_id
+            $event = Event::create([
+                'title' => $data['title'],
+                'description' => $data['description'],
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+                'location' => $data['location'],
+                'color' => $data['color'],
+                'user_id' => auth()->id(),
+                'is_all_day' => $request->is_all_day ?? false,
+                'calendar_type' => 'division',
+                'private' => $request->boolean('private'),
+                'google_event_id' => $googleEvent->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Google Calendar event created and stored locally',
+                'event' => $event
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Google event creation error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+
+    public function updateGoogleEvent(Request $request, $localEventId)
+    {
+        try {
+            $event = Event::findOrFail($localEventId);
+
+            $request->validate([
+                'title' => 'required|string|min:1',
+                'description' => 'nullable|string',
+                'start_date' => 'required|date',
+                'end_date' => 'required|date|after_or_equal:start_date',
+                'location' => 'nullable|string',
+                'color' => 'nullable|string',
+                'guests' => 'nullable|string',
+            ]);
+
+            $data = [
+                'title' => $request->title,
+                'description' => $request->description,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'location' => $request->location,
+                'color' => $request->color,
+                'guests' => json_decode($request->guests, true) ?? [],
+            ];
+
+            if (!$event->google_event_id) {
+                return response()->json(['success' => false, 'error' => 'No Google event ID associated.']);
+            }
+
+            $updatedGoogleEvent = $this->googleCalendarService->updateEvent($event->google_event_id, $data);
+
+            // Also update local event
+            $event->update($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Google Calendar event updated successfully',
+                'event' => $updatedGoogleEvent
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Google event update error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+
+    public function destroyGoogleEvent($localEventId)
+    {
+        try {
+            $event = Event::findOrFail($localEventId);
+
+            if (!$event->google_event_id) {
+                return response()->json(['success' => false, 'error' => 'No Google event ID to delete.']);
+            }
+
+            $this->googleCalendarService->deleteEvent($event->google_event_id);
+
+            $event->delete();
+
+            return response()->json(['success' => true, 'message' => 'Event deleted successfully from Google and local DB']);
+        } catch (\Exception $e) {
+            \Log::error('Google event deletion error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
 }
-
-
-

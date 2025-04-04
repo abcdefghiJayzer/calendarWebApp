@@ -87,26 +87,107 @@
 
     function editEvent() {
         if (!currentEventId) return;
-        fetch(`/OJT/calendarWebApp/events/${currentEventId}`)
-            .then(response => response.json())
-            .then(data => {
-                // First open edit modal, then close details modal
-                openEditModal(data);
-                // Remove backdrop and modal without affecting calendar container
-                const modal = document.getElementById('event-details-modal');
-                modal.classList.add('translate-x-full');
-                const backdrop = document.getElementById('details-backdrop');
-                if (backdrop) {
-                    backdrop.remove();
-                }
-                document.body.style.overflow = '';
-                currentEventId = null;
-            })
-            .catch(error => console.error('Error:', error));
+
+        // Check if this is a Google event by looking for the 'google_' prefix
+        const isGoogleEvent = currentEventId.startsWith('google_');
+
+        if (isGoogleEvent) {
+            // For Google events, don't fetch from server, use the data already available from the calendar
+            const googleEventId = currentEventId.replace('google_', '');
+            console.log('Editing Google Calendar event:', googleEventId);
+
+            // Get all events from the calendar
+            const allEvents = window.calendar.getEvents();
+
+            // Find the matching Google event
+            const googleEvent = allEvents.find(e => e.id === currentEventId);
+
+            if (googleEvent) {
+                console.log('Found Google event data:', googleEvent);
+                const eventData = {
+                    id: googleEvent.id,
+                    title: googleEvent.title,
+                    start: googleEvent.start,
+                    end: googleEvent.end,
+                    allDay: googleEvent.allDay,
+                    backgroundColor: googleEvent.backgroundColor,
+                    isGoogleEvent: true,  // Mark explicitly as Google event
+                    extendedProps: {
+                        description: googleEvent.extendedProps.description || '',
+                        location: googleEvent.extendedProps.location || '',
+                        guests: googleEvent.extendedProps.guests || [],
+                        calendar_type: googleEvent.extendedProps.calendarType || 'institute',
+                        private: googleEvent.extendedProps.private || false,
+                        user_id: googleEvent.extendedProps.user_id || null
+                    }
+                };
+
+                // Open edit modal with this data
+                openEditModal(eventData);
+
+                // Close the details modal
+                closeEventModal();
+            } else {
+                console.error('Google Calendar event not found in calendar events');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Could not find Google Calendar event data',
+                    confirmButtonColor: '#22c55e'
+                });
+            }
+        } else {
+            // Regular event - fetch from server as before
+            fetch(`${window.baseUrl}/events/${currentEventId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // First open edit modal, then close details modal
+                    data.isGoogleEvent = isGoogleEvent;
+                    console.log('Data before opening edit modal:', data);
+                    openEditModal(data);
+
+                    // Remove backdrop and modal without affecting calendar container
+                    const modal = document.getElementById('event-details-modal');
+                    modal.classList.add('translate-x-full');
+                    const backdrop = document.getElementById('details-backdrop');
+                    if (backdrop) {
+                        backdrop.remove();
+                    }
+                    document.body.style.overflow = '';
+                    currentEventId = null;
+                })
+                .catch(error => console.error('Error:', error));
+        }
     }
 
     async function deleteEvent() {
         if (!currentEventId) return;
+
+        // Check if this is a Google event by looking for the 'google_' prefix
+        const isGoogleEvent = currentEventId.startsWith('google_');
+
+        if (isGoogleEvent) {
+            // Check if user is authenticated with Google
+            const calendarEl = document.getElementById('calendar');
+            const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+            if (!isAuthenticated) {
+                Swal.fire({
+                    title: 'Google Authentication Required',
+                    text: 'You need to connect your Google account to delete Google Calendar events',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#22c55e',
+                    confirmButtonText: 'Connect Google Account',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{{ route('google.auth') }}";
+                    }
+                });
+                return;
+            }
+        }
 
         const result = await Swal.fire({
             title: 'Are you sure?',
@@ -119,16 +200,57 @@
         });
 
         if (result.isConfirmed) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = `/OJT/calendarWebApp/events/${currentEventId}`;
-            form.innerHTML = `
-                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
-                <input type="hidden" name="_method" value="DELETE">
-            `;
-            document.body.appendChild(form);
-            closeEventModal();
-            form.submit();
+            try {
+                if (isGoogleEvent) {
+                    console.log('Deleting Google Calendar event:', currentEventId);
+                    // Extract the actual Google event ID
+                    const googleEventId = currentEventId.replace('google_', '');
+
+                    try {
+                        // Use the correct path with baseUrl for consistency
+                        const response = await window.googleCalendar.deleteEvent(googleEventId);
+                        console.log('Delete response:', response);
+
+                        closeEventModal();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: 'Event deleted successfully!',
+                            confirmButtonColor: '#22c55e'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } catch (error) {
+                        console.error('Error in deleteEvent:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Failed to delete the event: ' + error.message,
+                            confirmButtonColor: '#22c55e'
+                        });
+                    }
+                } else {
+                    // Regular event deletion
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = `${window.baseUrl}/events/${currentEventId}`;
+                    form.innerHTML = `
+                        <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                        <input type="hidden" name="_method" value="DELETE">
+                    `;
+                    document.body.appendChild(form);
+                    closeEventModal();
+                    form.submit();
+                }
+            } catch (error) {
+                console.error('Error deleting event:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to delete the event: ' + error.message,
+                    confirmButtonColor: '#22c55e'
+                });
+            }
         }
     }
 

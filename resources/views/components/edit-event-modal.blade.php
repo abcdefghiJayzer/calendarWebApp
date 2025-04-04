@@ -122,6 +122,22 @@
 let editGuests = [];
 
 function openEditModal(event) {
+    console.log('openEditModal function called!', event);
+
+    // Safeguard against missing event object
+    if (!event) {
+        console.error('No event data provided to openEditModal');
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No event data available for editing',
+            confirmButtonColor: '#22c55e'
+        });
+        return;
+    }
+
+    console.log('Opening edit modal with event:', event);
+
     const modal = document.getElementById('edit-event-modal');
     modal.classList.remove('translate-x-full');
     document.getElementById('calendar-container').classList.add('mr-120');
@@ -135,16 +151,37 @@ function openEditModal(event) {
 
     document.body.style.overflow = 'hidden';
 
-    // Set form fields
-    document.getElementById('edit-event-id').value = event.id;
-    document.getElementById('edit-title').value = event.title;
-    document.getElementById('edit-description').value = event.extendedProps.description || '';
-    document.getElementById('edit-location').value = event.extendedProps.location || '';
-    document.getElementById('edit-is-all-day').checked = event.allDay;
-    document.getElementById('edit-private').checked = event.extendedProps.private || false;
+    // Store whether this is a Google event - ensure we capture this explicitly
+    window.currentEditingGoogleEvent = event.isGoogleEvent || false;
+    console.log('Is Google event:', window.currentEditingGoogleEvent);
+
+    // Define default values for all fields
+    const defaultValues = {
+        id: '',
+        title: 'Untitled Event',
+        description: '',
+        location: '',
+        allDay: false,
+        private: false,
+        calendar_type: 'division',
+        backgroundColor: '#3b82f6',
+        guests: []
+    };
+
+    // Set form fields with default values if properties are missing
+    document.getElementById('edit-event-id').value = event.id || defaultValues.id;
+    document.getElementById('edit-title').value = event.title || defaultValues.title;
+    document.getElementById('edit-description').value =
+        event.extendedProps?.description || defaultValues.description;
+    document.getElementById('edit-location').value =
+        event.extendedProps?.location || defaultValues.location;
+    document.getElementById('edit-is-all-day').checked = event.allDay || defaultValues.allDay;
+    document.getElementById('edit-private').checked =
+        event.extendedProps?.private || defaultValues.private;
 
     // Set calendar type
-    const calendarType = event.extendedProps.calendar_type || 'division';
+    const calendarType = event.extendedProps?.calendar_type ||
+        event.extendedProps?.calendarType || defaultValues.calendar_type;
     document.getElementById('edit-calendar_type').value = calendarType;
 
     // Fix date handling
@@ -170,7 +207,7 @@ function openEditModal(event) {
     }
 
     // Set guests
-    editGuests = event.extendedProps.guests || [];
+    editGuests = event.extendedProps?.guests || [];
     document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
     const guestContainer = document.getElementById('edit-guest-container');
     const guestInput = document.getElementById('edit-guest-input');
@@ -180,6 +217,30 @@ function openEditModal(event) {
     });
 
     editGuests.forEach(email => createEditGuestTag(email));
+
+    // If Google event but not authenticated, show warning
+    if (window.currentEditingGoogleEvent) {
+        const calendarEl = document.getElementById('calendar');
+        const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+        if (!isAuthenticated) {
+            closeEditModal();
+            Swal.fire({
+                title: 'Google Authentication Required',
+                text: 'You need to connect your Google account to edit Google Calendar events',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#22c55e',
+                confirmButtonText: 'Connect Google Account',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "{{ route('google.auth') }}";
+                }
+            });
+            return;
+        }
+    }
 }
 
 function closeEditModal() {
@@ -295,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
                 checkData.append('event_id', eventId);
 
-                const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+                const checkResponse = await fetch(`${window.baseUrl}/check-conflicts`, {
                     method: 'POST',
                     body: checkData,
                     headers: {
@@ -338,16 +399,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Proceed with event update
-            const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            });
+            // Check if this is a Google event
+            let response;
+            console.log('Updating event, is Google event:', window.currentEditingGoogleEvent, 'Event ID:', eventId);
 
-            if (response.ok) {
+            if (window.currentEditingGoogleEvent) {
+                // Extract the actual Google event ID
+                const googleEventId = eventId.replace('google_', '');
+                console.log('Updating Google event with ID:', googleEventId);
+
+                try {
+                    // Debug the contents of formData
+                    console.log("Form data being sent for Google Calendar update:");
+                    for (let pair of formData.entries()) {
+                        console.log(pair[0] + ': ' + pair[1]);
+                    }
+
+                    response = await window.googleCalendar.updateEvent(googleEventId, formData);
+                    console.log('Google update response:', response);
+                } catch (error) {
+                    console.error('Error with Google update:', error);
+                    throw error;
+                }
+            } else {
+                // Regular event update
+                response = await fetch(`${window.baseUrl}/events/${eventId}`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
+            }
+
+            if (response.ok || (response.success !== undefined && response.success)) {
                 closeEditModal();
                 Swal.fire({
                     icon: 'success',
@@ -358,11 +443,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     location.reload();
                 });
             } else {
-                const errorData = await response.json();
+                let errorMessage = 'Failed to update event';
+                if (response.json) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorData.error || errorMessage;
+                } else if (response.error) {
+                    errorMessage = response.error;
+                }
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: errorData.message || 'Failed to update event',
+                    text: errorMessage,
                     confirmButtonColor: '#22c55e'
                 });
             }
@@ -371,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: 'Failed to update event. Please try again.',
+                text: error.message || 'Failed to update event. Please try again.',
                 confirmButtonColor: '#22c55e'
             });
         }

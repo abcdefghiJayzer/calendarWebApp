@@ -20,7 +20,8 @@ class Event extends Model
         'color',
         'status',
         'calendar_type',
-        'private'  // Add this line
+        'private',  // Add this line
+        'google_event_id'
     ];
 
     // In App\Models\Event.php

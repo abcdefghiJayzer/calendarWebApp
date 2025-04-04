@@ -17,6 +17,24 @@
                 Home
             </a>
 
+            <!-- Google Calendar Connection Section -->
+            <div class="mt-4 p-3 bg-green-700 rounded-lg">
+                <h3 class="text-white font-medium mb-2">Google Calendar</h3>
+                <div id="sidebar-google-status" class="text-sm text-white mb-2">
+                    Checking connection...
+                </div>
+                <div id="sidebar-connect-btn" class="hidden">
+                    <a href="{{ route('google.auth') }}" class="block w-full py-2 px-4 text-center text-white bg-green-900 rounded-lg hover:bg-green-600">
+                        Connect
+                    </a>
+                </div>
+                <div id="sidebar-disconnect-btn" class="hidden">
+                    <a href="{{ route('google.disconnect') }}" class="block w-full py-2 px-4 text-center text-white bg-red-600 rounded-lg hover:bg-red-700">
+                        Disconnect
+                    </a>
+                </div>
+            </div>
+
             <div class="mt-8">
                 <h3 class="text-white font-medium mb-2">Calendar Filters</h3>
                 <div class="space-y-2">
@@ -40,39 +58,98 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing sidebar filters');
     const calendarFilters = document.querySelectorAll('.calendar-filter');
 
-    // Load saved filter preferences
-    const savedFilters = localStorage.getItem('calendarFilters')
-        ? JSON.parse(localStorage.getItem('calendarFilters'))
-        : ['institute', 'sectoral', 'division']; // Default all checked
+    try {
+        // Load saved filter preferences
+        const savedFilters = localStorage.getItem('calendarFilters')
+            ? JSON.parse(localStorage.getItem('calendarFilters'))
+            : ['institute', 'sectoral', 'division']; // Default all checked
 
-    // Apply saved preferences to checkboxes
-    calendarFilters.forEach(filter => {
-        filter.checked = savedFilters.includes(filter.value);
-    });
+        console.log('Saved filters from localStorage:', savedFilters);
 
-    function updateCalendarEvents() {
-        const selectedCalendars = Array.from(calendarFilters)
-            .filter(cb => cb.checked)
-            .map(cb => cb.value);
+        // Apply saved preferences to checkboxes
+        calendarFilters.forEach(filter => {
+            filter.checked = savedFilters.includes(filter.value);
+            console.log(`Filter ${filter.value} checked:`, filter.checked);
+        });
 
-        // Save filter preferences
-        localStorage.setItem('calendarFilters', JSON.stringify(selectedCalendars));
+        function updateCalendarEvents() {
+            const selectedCalendars = Array.from(calendarFilters)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
 
-        if (window.calendar) {
-            window.calendar.getEvents().forEach(event => {
-                const shouldShow = selectedCalendars.includes(event.extendedProps.calendarType);
-                event.setProp('display', shouldShow ? 'auto' : 'none');
-            });
+            console.log('Selected calendar filters:', selectedCalendars);
+
+            // Save filter preferences
+            localStorage.setItem('calendarFilters', JSON.stringify(selectedCalendars));
+
+            if (window.calendar) {
+                const allEvents = window.calendar.getEvents();
+                console.log(`Applying filters to ${allEvents.length} events`);
+
+                allEvents.forEach(event => {
+                    // Get the calendar type from event properties
+                    const calendarType = event.extendedProps.calendarType || 'division';
+                    const shouldShow = selectedCalendars.includes(calendarType);
+                    console.log(`Event "${event.title}" (${calendarType}): ${shouldShow ? 'show' : 'hide'}`);
+                    event.setProp('display', shouldShow ? 'auto' : 'none');
+                });
+            } else {
+                console.warn('Calendar not initialized yet, cannot apply filters');
+            }
         }
+
+        calendarFilters.forEach(filter => {
+            filter.addEventListener('change', function() {
+                console.log(`Filter ${this.value} changed to ${this.checked}`);
+                updateCalendarEvents();
+            });
+        });
+
+        // Apply filters on initial load and when window.calendar becomes available
+        const checkCalendarReady = setInterval(() => {
+            if (window.calendar) {
+                console.log('Calendar is ready, applying filters');
+                updateCalendarEvents();
+                clearInterval(checkCalendarReady);
+            } else {
+                console.log('Waiting for calendar to initialize...');
+            }
+        }, 500);
+
+        // Clear the interval after 10 seconds to prevent infinite checking
+        setTimeout(() => clearInterval(checkCalendarReady), 10000);
+
+        // Check Google auth status
+        fetch('{{ route("google.status") }}')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Google auth status in sidebar:', data);
+                const statusEl = document.getElementById('sidebar-google-status');
+                const connectBtn = document.getElementById('sidebar-connect-btn');
+                const disconnectBtn = document.getElementById('sidebar-disconnect-btn');
+
+                if (data.authenticated) {
+                    statusEl.textContent = 'Connected ✓';
+                    statusEl.classList.add('text-green-300');
+                    disconnectBtn.classList.remove('hidden');
+                } else {
+                    statusEl.textContent = 'Not connected';
+                    statusEl.classList.add('text-red-300');
+                    connectBtn.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Error checking Google auth status:', error);
+                document.getElementById('sidebar-google-status').textContent = 'Connection error';
+                document.getElementById('sidebar-google-status').classList.add('text-red-300');
+                document.getElementById('sidebar-connect-btn').classList.remove('hidden');
+            });
+
+    } catch (error) {
+        console.error('Error in sidebar filter initialization:', error);
     }
-
-    calendarFilters.forEach(filter => {
-        filter.addEventListener('change', updateCalendarEvents);
-    });
-
-    // Apply filters on initial load
-    updateCalendarEvents();
 });
 </script>
