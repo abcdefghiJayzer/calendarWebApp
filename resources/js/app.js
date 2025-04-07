@@ -90,13 +90,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Apply filter settings
                         const savedFilters = localStorage.getItem('calendarFilters')
                             ? JSON.parse(localStorage.getItem('calendarFilters'))
-                            : ['institute', 'sectoral', 'division'];
+                            : ['institute', 'sectoral', 'division', 'google'];
 
-                        // For Google events, use 'institute', for local events use the defined type
-                        const calendarType = info.event.extendedProps.source === 'google' ?
-                            'institute' : info.event.extendedProps.calendarType || 'division';
+                        // The critical issue is here - we need to properly identify Google events
+                        // Check both the source property AND if the ID starts with 'google_'
+                        const isGoogleEvent = info.event.extendedProps.source === 'google' ||
+                                            info.event.id.startsWith('google_');
 
-                        const shouldShow = calendarType && savedFilters.includes(calendarType);
+                        // Use google as the filter type for Google events
+                        const filterType = isGoogleEvent ? 'google' :
+                                         (info.event.extendedProps.calendarType || 'division');
+
+                        const shouldShow = filterType && savedFilters.includes(filterType);
                         info.event.setProp('display', shouldShow ? 'auto' : 'none');
                     } catch (err) {
                         console.error('Error in eventDidMount:', err);
@@ -147,6 +152,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     className: 'gcal-event',
                     color: '#0288d1',
                     textColor: 'white',
+                    eventDataTransform: function(eventData) {
+                        // Ensure Google events are immediately tagged correctly
+                        if (!eventData.extendedProps) {
+                            eventData.extendedProps = {};
+                        }
+                        eventData.extendedProps.source = 'google';
+                        return eventData;
+                    },
                     success: function (events) {
                         console.log('Google Calendar events loaded successfully:', events.length);
                     },
@@ -214,6 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     console.log(pair[0] + ': ' + pair[1]);
                 }
 
+                // Fix: Use the correct route path that matches web.php
                 const response = await fetch(`${window.baseUrl}/google/events/${eventId}`, {
                     method: 'POST',
                     body: formData,

@@ -95,13 +95,19 @@ class CalendarController extends Controller
             'end' => $event->end_date,
             'allDay' => $event->is_all_day,
             'backgroundColor' => $event->color,
+            'description' => $event->description,
+            'location' => $event->location,
+            'calendar_type' => $event->calendar_type,
+            'private' => $event->private,
+            'user_id' => $event->user_id,
+            'guests' => $event->participants->pluck('email'),
             'extendedProps' => [
                 'description' => $event->description,
                 'location' => $event->location,
                 'guests' => $event->participants->pluck('email'),
+                'calendar_type' => $event->calendar_type,
                 'private' => $event->private,
-                'user_id' => $event->user_id,
-                'calendar_type' => $event->calendar_type
+                'user_id' => $event->user_id
             ]
         ]);
     }
@@ -347,11 +353,32 @@ class CalendarController extends Controller
         }
     }
 
-
     public function updateGoogleEvent(Request $request, $localEventId)
     {
         try {
-            $event = Event::findOrFail($localEventId);
+            // Check if this is a Google event ID with google_ prefix
+            if (strpos($localEventId, 'google_') === 0) {
+                // Extract the actual Google event ID
+                $googleEventId = substr($localEventId, 7); // Remove 'google_' prefix
+                \Log::info('Removing google_ prefix from event ID', [
+                    'original' => $localEventId,
+                    'processed' => $googleEventId
+                ]);
+            } else {
+                // Try to find the event in the database to get its Google event ID
+                $event = Event::where('id', $localEventId)
+                    ->orWhere('google_event_id', $localEventId)
+                    ->first();
+
+                if (!$event) {
+                    return response()->json(['success' => false, 'error' => 'Event not found.'], 404);
+                }
+
+                $googleEventId = $event->google_event_id;
+                if (!$googleEventId) {
+                    return response()->json(['success' => false, 'error' => 'No Google event ID associated.']);
+                }
+            }
 
             $request->validate([
                 'title' => 'required|string|min:1',
@@ -373,14 +400,25 @@ class CalendarController extends Controller
                 'guests' => json_decode($request->guests, true) ?? [],
             ];
 
-            if (!$event->google_event_id) {
-                return response()->json(['success' => false, 'error' => 'No Google event ID associated.']);
+            \Log::info('Updating Google event', [
+                'eventId' => $googleEventId,
+                'data' => $data
+            ]);
+
+            $updatedGoogleEvent = $this->googleCalendarService->updateEvent($googleEventId, $data);
+
+            // Also update local event if it exists
+            $localEvent = Event::where('google_event_id', $googleEventId)->first();
+            if ($localEvent) {
+                $localEvent->update([
+                    'title' => $data['title'],
+                    'description' => $data['description'],
+                    'start_date' => $data['start_date'],
+                    'end_date' => $data['end_date'],
+                    'location' => $data['location'],
+                    'color' => $data['color'],
+                ]);
             }
-
-            $updatedGoogleEvent = $this->googleCalendarService->updateEvent($event->google_event_id, $data);
-
-            // Also update local event
-            $event->update($data);
 
             return response()->json([
                 'success' => true,
@@ -388,11 +426,12 @@ class CalendarController extends Controller
                 'event' => $updatedGoogleEvent
             ]);
         } catch (\Exception $e) {
-            \Log::error('Google event update error: ' . $e->getMessage());
+            \Log::error('Google event update error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
-
 
     public function destroyGoogleEvent($localEventId)
     {

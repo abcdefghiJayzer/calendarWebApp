@@ -50,6 +50,10 @@
                         <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="division">
                         <span class="ml-2">Division</span>
                     </label>
+                    <label class="flex items-center text-white cursor-pointer">
+                        <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="google">
+                        <span class="ml-2">Google Calendar</span>
+                    </label>
                 </div>
             </div>
         </div>
@@ -65,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load saved filter preferences
         const savedFilters = localStorage.getItem('calendarFilters')
             ? JSON.parse(localStorage.getItem('calendarFilters'))
-            : ['institute', 'sectoral', 'division']; // Default all checked
+            : ['institute', 'sectoral', 'division', 'google']; // Default all checked including Google
 
         console.log('Saved filters from localStorage:', savedFilters);
 
@@ -90,8 +94,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log(`Applying filters to ${allEvents.length} events`);
 
                 allEvents.forEach(event => {
-                    // Get the calendar type from event properties
-                    const calendarType = event.extendedProps.calendarType || 'division';
+                    // Handle Google events differently
+                    const isGoogleEvent = event.extendedProps.source === 'google' ||
+                                         event.id.startsWith('google_');
+
+                    // Determine calendar type - special handling for Google events
+                    let calendarType;
+                    if (isGoogleEvent) {
+                        calendarType = 'google';
+                    } else {
+                        calendarType = event.extendedProps.calendarType || 'division';
+                    }
+
                     const shouldShow = selectedCalendars.includes(calendarType);
                     console.log(`Event "${event.title}" (${calendarType}): ${shouldShow ? 'show' : 'hide'}`);
                     event.setProp('display', shouldShow ? 'auto' : 'none');

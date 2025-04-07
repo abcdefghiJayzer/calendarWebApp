@@ -22,7 +22,15 @@ class GoogleCalendarService
         try {
             $this->client = new Google_Client();
             $this->client->setApplicationName('Calendar Web App');
-            $this->client->setScopes(Google_Service_Calendar::CALENDAR);
+            // Make sure we're using the full calendar scope, not just readonly
+            $this->client->setScopes([
+                Google_Service_Calendar::CALENDAR,  // Full access
+                // Note: CALENDAR_READONLY would not allow updates/deletes
+            ]);
+
+            \Log::info('Google client initialized with scopes', [
+                'scopes' => $this->client->getScopes()
+            ]);
 
             // Check if credential file exists before using it
             $credentialsPath = storage_path('app/google/oauth-credentials.json');
@@ -217,40 +225,66 @@ class GoogleCalendarService
             throw new Exception('Not authenticated with Google Calendar');
         }
 
-        $event = $this->service->events->get($this->calendarId, $eventId);
+        try {
+            $event = $this->service->events->get($this->calendarId, $eventId);
 
-        $event->setSummary($data['title']);
-        if (isset($data['description'])) {
-            $event->setDescription($data['description']);
-        }
-
-        $event->setStart([
-            'dateTime' => date('c', strtotime($data['start_date'])),
-            'timeZone' => config('app.timezone'),
-        ]);
-
-        $event->setEnd([
-            'dateTime' => date('c', strtotime($data['end_date'])),
-            'timeZone' => config('app.timezone'),
-        ]);
-
-        if (isset($data['location'])) {
-            $event->setLocation($data['location']);
-        }
-
-        if (isset($data['color'])) {
-            $event->setColorId($this->mapColorToGoogleColorId($data['color']));
-        }
-
-        if (!empty($data['guests'])) {
-            $attendees = [];
-            foreach ($data['guests'] as $email) {
-                $attendees[] = ['email' => $email];
+            $event->setSummary($data['title']);
+            if (isset($data['description'])) {
+                $event->setDescription($data['description']);
             }
-            $event->setAttendees($attendees);
-        }
 
-        return $this->service->events->update($this->calendarId, $eventId, $event);
+            $event->setStart([
+                'dateTime' => date('c', strtotime($data['start_date'])),
+                'timeZone' => config('app.timezone'),
+            ]);
+
+            $event->setEnd([
+                'dateTime' => date('c', strtotime($data['end_date'])),
+                'timeZone' => config('app.timezone'),
+            ]);
+
+            if (isset($data['location'])) {
+                $event->setLocation($data['location']);
+            }
+
+            if (isset($data['color'])) {
+                $event->setColorId($this->mapColorToGoogleColorId($data['color']));
+            }
+
+            if (!empty($data['guests'])) {
+                $attendees = [];
+                foreach ($data['guests'] as $email) {
+                    $attendees[] = ['email' => $email];
+                }
+                $event->setAttendees($attendees);
+            }
+
+            \Log::info('Updating Google Calendar event', [
+                'eventId' => $eventId,
+                'calendarId' => $this->calendarId,
+                'title' => $data['title']
+            ]);
+
+            $updatedEvent = $this->service->events->update($this->calendarId, $eventId, $event);
+            \Log::info('Google Calendar event updated successfully', ['eventId' => $eventId]);
+
+            return $updatedEvent;
+        } catch (\Google\Service\Exception $e) {
+            $error = json_decode($e->getMessage(), true);
+            \Log::error('Google API error when updating event', [
+                'eventId' => $eventId,
+                'calendarId' => $this->calendarId,
+                'error' => $error,
+                'message' => $e->getMessage()
+            ]);
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Error updating Google Calendar event', [
+                'eventId' => $eventId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     public function deleteEvent($eventId)
@@ -259,7 +293,32 @@ class GoogleCalendarService
             throw new Exception('Not authenticated with Google Calendar');
         }
 
-        return $this->service->events->delete($this->calendarId, $eventId);
+        try {
+            \Log::info('Deleting Google Calendar event', [
+                'eventId' => $eventId,
+                'calendarId' => $this->calendarId
+            ]);
+
+            $result = $this->service->events->delete($this->calendarId, $eventId);
+            \Log::info('Google Calendar event deleted successfully', ['eventId' => $eventId]);
+
+            return $result;
+        } catch (\Google\Service\Exception $e) {
+            $error = json_decode($e->getMessage(), true);
+            \Log::error('Google API error when deleting event', [
+                'eventId' => $eventId,
+                'calendarId' => $this->calendarId,
+                'error' => $error,
+                'message' => $e->getMessage()
+            ]);
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Error deleting Google Calendar event', [
+                'eventId' => $eventId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     // Map custom colors to Google Calendar color IDs

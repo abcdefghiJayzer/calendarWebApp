@@ -88,22 +88,38 @@
     function editEvent() {
         if (!currentEventId) return;
 
-        // Check if this is a Google event by looking for the 'google_' prefix
-        const isGoogleEvent = currentEventId.startsWith('google_');
+        // Improved Google event detection - check for google_ prefix
+        // OR check for typical Google Calendar ID format (long alphanumeric string)
+        const hasGooglePrefix = currentEventId.startsWith('google_');
+        const isGoogleFormatId = /^[a-z0-9]{26,}$/.test(currentEventId);
+        const isGoogleEvent = hasGooglePrefix || isGoogleFormatId;
+
+        console.log('Editing event', {
+            id: currentEventId,
+            hasGooglePrefix,
+            isGoogleFormatId,
+            isGoogleEvent
+        });
 
         if (isGoogleEvent) {
             // For Google events, don't fetch from server, use the data already available from the calendar
-            const googleEventId = currentEventId.replace('google_', '');
-            console.log('Editing Google Calendar event:', googleEventId);
+            console.log('Editing Google Calendar event:', currentEventId);
 
             // Get all events from the calendar
             const allEvents = window.calendar.getEvents();
+            console.log('Found events in calendar:', allEvents.length);
 
-            // Find the matching Google event
-            const googleEvent = allEvents.find(e => e.id === currentEventId);
+            // Find the matching Google event - handle both prefixed and non-prefixed IDs
+            const googleEvent = allEvents.find(e => {
+                return e.id === currentEventId ||
+                      e.id === 'google_' + currentEventId ||
+                      currentEventId === 'google_' + e.id;
+            });
 
             if (googleEvent) {
                 console.log('Found Google event data:', googleEvent);
+                console.log('Event extended props:', googleEvent.extendedProps);
+
                 const eventData = {
                     id: googleEvent.id,
                     title: googleEvent.title,
@@ -111,7 +127,7 @@
                     end: googleEvent.end,
                     allDay: googleEvent.allDay,
                     backgroundColor: googleEvent.backgroundColor,
-                    isGoogleEvent: true,  // Mark explicitly as Google event
+                    isGoogleEvent: true,
                     extendedProps: {
                         description: googleEvent.extendedProps.description || '',
                         location: googleEvent.extendedProps.location || '',
@@ -122,13 +138,19 @@
                     }
                 };
 
-                // Open edit modal with this data
-                openEditModal(eventData);
-
-                // Close the details modal
+                // Close the details modal first
                 closeEventModal();
+
+                // Then open edit modal with this data
+                setTimeout(() => {
+                    window.openEditModal(eventData);
+                }, 100);
             } else {
                 console.error('Google Calendar event not found in calendar events');
+                // Additional debug info to find the event
+                console.log('Looking for event ID:', currentEventId);
+                console.log('All event IDs in calendar:', allEvents.map(e => e.id));
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
@@ -137,26 +159,49 @@
                 });
             }
         } else {
-            // Regular event - fetch from server as before
+            // Regular event - fetch from server
             fetch(`${window.baseUrl}/events/${currentEventId}`)
-                .then(response => response.json())
-                .then(data => {
-                    // First open edit modal, then close details modal
-                    data.isGoogleEvent = isGoogleEvent;
-                    console.log('Data before opening edit modal:', data);
-                    openEditModal(data);
-
-                    // Remove backdrop and modal without affecting calendar container
-                    const modal = document.getElementById('event-details-modal');
-                    modal.classList.add('translate-x-full');
-                    const backdrop = document.getElementById('details-backdrop');
-                    if (backdrop) {
-                        backdrop.remove();
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
                     }
-                    document.body.style.overflow = '';
-                    currentEventId = null;
+                    return response.json();
                 })
-                .catch(error => console.error('Error:', error));
+                .then(data => {
+                    // Add the isGoogleEvent flag
+                    data.isGoogleEvent = false;
+
+                    // Format the data to match expected structure
+                    if (!data.extendedProps && data.calendar_type) {
+                        data.extendedProps = {
+                            description: data.description || '',
+                            location: data.location || '',
+                            guests: data.guests || [],
+                            calendar_type: data.calendar_type || 'division',
+                            private: data.private || false,
+                            user_id: data.user_id || null
+                        };
+                    }
+
+                    console.log('Event data from server:', data);
+
+                    // Close the details modal first
+                    closeEventModal();
+
+                    // Then open edit modal with this data
+                    setTimeout(() => {
+                        window.openEditModal(data);
+                    }, 100);
+                })
+                .catch(error => {
+                    console.error('Error fetching event data:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to load event data',
+                        confirmButtonColor: '#22c55e'
+                    });
+                });
         }
     }
 

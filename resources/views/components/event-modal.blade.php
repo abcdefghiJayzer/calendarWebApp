@@ -72,6 +72,16 @@
                         class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
                 </div>
 
+                <div class="mb-4">
+                    <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
+                    <select name="calendar_type" id="edit-calendar_type" required
+                        class="w-full border-gray-300 rounded-lg shadow-sm focus:border-green-500 focus:ring-green-500">
+                        <option value="institute">Institute Level</option>
+                        <option value="sectoral">Sectoral</option>
+                        <option value="division">Division</option>
+                    </select>
+                </div>
+
                 <div class="flex items-center">
                     <input type="hidden" name="is_all_day" value="0">
                     <input type="checkbox" name="is_all_day" id="edit-is-all-day" value="1"
@@ -81,10 +91,13 @@
 
                 <div class="flex items-center mt-2">
                     <input type="hidden" name="private" value="0">
-                    <input type="checkbox" name="private" id="private" value="1"
+                    <input type="checkbox" name="private" id="edit-private" value="1"
                         class="text-green-600 focus:ring-green-500 rounded">
-                    <label for="private" class="ml-2 text-sm text-gray-700">Private Event</label>
+                    <label for="edit-private" class="ml-2 text-sm text-gray-700">Private Event</label>
                 </div>
+
+                <input type="hidden" name="is_google_event" id="edit-is-google-event" value="0">
+                <input type="hidden" name="google_event_id" id="edit-google-event-id" value="">
 
                 <div class="flex justify-end space-x-2">
                     <button type="submit"
@@ -99,12 +112,24 @@
 
 <script>
 let editGuests = [];
+let isGoogleEvent = false;
 
 function openEditModal(event) {
     console.log('Opening edit modal with event:', event);
 
     document.getElementById('edit-event-modal').classList.remove('hidden');
     document.getElementById('edit-event-id').value = event.id;
+
+    // Set hidden fields for Google events
+    isGoogleEvent = event.id.startsWith('google_') || event.extendedProps.source === 'google';
+    document.getElementById('edit-is-google-event').value = isGoogleEvent ? '1' : '0';
+
+    if (isGoogleEvent) {
+        // Store the Google event ID without the prefix
+        const googleEventId = event.id.replace('google_', '');
+        document.getElementById('edit-google-event-id').value = googleEventId;
+        console.log('Google event detected, ID:', googleEventId);
+    }
 
     // Handle private event visibility
     if (event.extendedProps.private && event.extendedProps.user_id !== {{ auth()->id() }}) {
@@ -280,14 +305,39 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
             }
         }
 
-        // Proceed with event update
-        const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        // Check if this is a Google event
+        let response;
+        const isGoogleEventValue = document.getElementById('edit-is-google-event').value === '1';
+        console.log('Updating event, is Google event:', isGoogleEventValue, 'Event ID:', eventId);
+
+        if (isGoogleEventValue) {
+            // Use the stored Google event ID without prefix
+            const googleEventId = document.getElementById('edit-google-event-id').value || eventId.replace('google_', '');
+            console.log('Updating Google event with ID:', googleEventId);
+
+            try {
+                // Debug the contents of formData
+                console.log("Form data being sent for Google Calendar update:");
+                for (let pair of formData.entries()) {
+                    console.log(pair[0] + ': ' + pair[1]);
+                }
+
+                response = await window.googleCalendar.updateEvent(googleEventId, formData);
+                console.log('Google update response:', response);
+            } catch (error) {
+                console.error('Error with Google update:', error);
+                throw error;
             }
-        });
+        } else {
+            // Regular event update
+            response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+        }
 
         if (response.ok) {
             closeEditModal();

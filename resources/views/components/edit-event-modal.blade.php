@@ -3,7 +3,7 @@
         <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Edit Event</h2>
-                <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700">
+                <button onclick="window.closeEditModal()" class="text-gray-500 hover:text-gray-700">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -12,7 +12,6 @@
 
             <form id="edit-event-form" class="space-y-4">
                 @csrf
-                @method('PUT')
                 <input type="hidden" id="edit-event-id" name="id">
 
                 <div class="mb-4">
@@ -121,7 +120,8 @@
 <script>
 let editGuests = [];
 
-function openEditModal(event) {
+// Make openEditModal globally available by attaching it to window object
+window.openEditModal = function(event) {
     console.log('openEditModal function called!', event);
 
     // Safeguard against missing event object
@@ -131,6 +131,30 @@ function openEditModal(event) {
             icon: 'error',
             title: 'Error',
             text: 'No event data available for editing',
+            confirmButtonColor: '#22c55e'
+        });
+        return;
+    }
+
+    // Error check - if we got an error object instead of an event
+    if (event.error) {
+        console.error('Error data provided to openEditModal:', event.error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: event.error || 'Failed to load event data',
+            confirmButtonColor: '#22c55e'
+        });
+        return;
+    }
+
+    // Check for required properties
+    if (!event.start || !event.id) {
+        console.error('Invalid event data provided to openEditModal:', event);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Invalid event data - missing required properties',
             confirmButtonColor: '#22c55e'
         });
         return;
@@ -146,7 +170,7 @@ function openEditModal(event) {
     const backdrop = document.createElement('div');
     backdrop.id = 'edit-backdrop';
     backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
-    backdrop.onclick = closeEditModal;
+    backdrop.onclick = window.closeEditModal;
     document.body.appendChild(backdrop);
 
     document.body.style.overflow = 'hidden';
@@ -155,48 +179,74 @@ function openEditModal(event) {
     window.currentEditingGoogleEvent = event.isGoogleEvent || false;
     console.log('Is Google event:', window.currentEditingGoogleEvent);
 
-    // Define default values for all fields
-    const defaultValues = {
-        id: '',
-        title: 'Untitled Event',
-        description: '',
-        location: '',
-        allDay: false,
-        private: false,
-        calendar_type: 'division',
-        backgroundColor: '#3b82f6',
-        guests: []
+    // Handle both API and FullCalendar event formats
+    const eventData = {
+        id: event.id || '',
+        title: event.title || 'Untitled Event',
+        start: event.start,
+        end: event.end,
+        allDay: event.allDay || false,
+        backgroundColor: event.backgroundColor || '#3b82f6',
+        extendedProps: event.extendedProps || {}
     };
 
-    // Set form fields with default values if properties are missing
-    document.getElementById('edit-event-id').value = event.id || defaultValues.id;
-    document.getElementById('edit-title').value = event.title || defaultValues.title;
-    document.getElementById('edit-description').value =
-        event.extendedProps?.description || defaultValues.description;
-    document.getElementById('edit-location').value =
-        event.extendedProps?.location || defaultValues.location;
-    document.getElementById('edit-is-all-day').checked = event.allDay || defaultValues.allDay;
-    document.getElementById('edit-private').checked =
-        event.extendedProps?.private || defaultValues.private;
+    // Set form fields
+    document.getElementById('edit-event-id').value = eventData.id;
+    document.getElementById('edit-title').value = eventData.title;
+
+    // Handle description - might be directly on event or in extendedProps
+    const description = eventData.extendedProps.description || event.description || '';
+    document.getElementById('edit-description').value = description;
+
+    // Handle location - might be directly on event or in extendedProps
+    const location = eventData.extendedProps.location || event.location || '';
+    document.getElementById('edit-location').value = location;
+
+    // All-day checkbox
+    document.getElementById('edit-is-all-day').checked = eventData.allDay;
+
+    // Private checkbox
+    const isPrivate = eventData.extendedProps.private || event.private || false;
+    document.getElementById('edit-private').checked = isPrivate;
 
     // Set calendar type
-    const calendarType = event.extendedProps?.calendar_type ||
-        event.extendedProps?.calendarType || defaultValues.calendar_type;
+    const calendarType = eventData.extendedProps.calendar_type ||
+                         eventData.extendedProps.calendarType ||
+                         event.calendar_type ||
+                         'division';
+
     document.getElementById('edit-calendar_type').value = calendarType;
 
-    // Fix date handling
-    const startDate = new Date(event.start);
-    const endDate = event.end ? new Date(event.end) : new Date(startDate);
+    // Fix date handling with extra validation
+    try {
+        const startDate = new Date(eventData.start);
+        const endDate = eventData.end ? new Date(eventData.end) : new Date(startDate);
 
-    // Add timezone offset to compensate for local timezone
-    const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
-    const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
+        // Validate dates before proceeding
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            throw new Error('Invalid date value');
+        }
 
-    document.getElementById('edit-start-date').value = startLocal.toISOString().slice(0, 16);
-    document.getElementById('edit-end-date').value = endLocal.toISOString().slice(0, 16);
+        // Add timezone offset to compensate for local timezone
+        const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
+        const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
+
+        document.getElementById('edit-start-date').value = startLocal.toISOString().slice(0, 16);
+        document.getElementById('edit-end-date').value = endLocal.toISOString().slice(0, 16);
+    } catch (err) {
+        console.error('Error processing event dates:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Invalid event date format',
+            confirmButtonColor: '#22c55e'
+        });
+        window.closeEditModal();
+        return;
+    }
 
     // Set color
-    const colorOption = document.querySelector(`.edit-color-option[data-color="${event.backgroundColor || '#3b82f6'}"]`);
+    const colorOption = document.querySelector(`.edit-color-option[data-color="${eventData.backgroundColor}"]`);
     if (colorOption) {
         const colorInput = colorOption.querySelector('input');
         colorInput.checked = true;
@@ -207,7 +257,7 @@ function openEditModal(event) {
     }
 
     // Set guests
-    editGuests = event.extendedProps?.guests || [];
+    editGuests = eventData.extendedProps.guests || event.guests || [];
     document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
     const guestContainer = document.getElementById('edit-guest-container');
     const guestInput = document.getElementById('edit-guest-input');
@@ -224,7 +274,7 @@ function openEditModal(event) {
         const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
 
         if (!isAuthenticated) {
-            closeEditModal();
+            window.closeEditModal();
             Swal.fire({
                 title: 'Google Authentication Required',
                 text: 'You need to connect your Google account to edit Google Calendar events',
@@ -241,9 +291,10 @@ function openEditModal(event) {
             return;
         }
     }
-}
+};
 
-function closeEditModal() {
+// Also make closeEditModal globally available
+window.closeEditModal = function() {
     const modal = document.getElementById('edit-event-modal');
     modal.classList.add('translate-x-full');
     document.getElementById('calendar-container').classList.remove('mr-120');
@@ -255,7 +306,7 @@ function closeEditModal() {
     }
 
     document.body.style.overflow = '';
-}
+};
 
 function createEditGuestTag(email) {
     const container = document.getElementById('edit-guest-container');
@@ -433,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (response.ok || (response.success !== undefined && response.success)) {
-                closeEditModal();
+                window.closeEditModal();
                 Swal.fire({
                     icon: 'success',
                     title: 'Success',
@@ -480,7 +531,7 @@ document.addEventListener('mousedown', function(event) {
     const modalContent = modal.querySelector('.h-full.bg-white');
 
     if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
-        closeEditModal();
+        window.closeEditModal();
     }
 }, true);
 </script>
