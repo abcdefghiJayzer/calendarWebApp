@@ -144,31 +144,68 @@ document.addEventListener('DOMContentLoaded', function () {
             const apiKey = calendarEl.getAttribute('data-api-key');
             const calendarId = calendarEl.getAttribute('data-calendar-id');
 
-            if (apiKey && calendarId) {
-                console.log('Adding Google Calendar source', { apiKey, calendarId });
-                calendar.addEventSource({
-                    googleCalendarId: calendarId,
-                    googleCalendarApiKey: apiKey,
-                    className: 'gcal-event',
-                    color: '#0288d1',
-                    textColor: 'white',
-                    eventDataTransform: function(eventData) {
-                        // Ensure Google events are immediately tagged correctly
-                        if (!eventData.extendedProps) {
-                            eventData.extendedProps = {};
+            // Get Google account email from sessionStorage to use as cache breaker
+            const connectedAccount = sessionStorage.getItem('connected_google_account') || '';
+
+            // Check if Google Calendar filter is active before loading
+            const savedFilters = localStorage.getItem('calendarFilters')
+                ? JSON.parse(localStorage.getItem('calendarFilters'))
+                : ['institute', 'sectoral', 'division', 'google'];
+
+            // Only load Google Calendar source if authenticated AND the filter is active
+            if (apiKey && calendarId && isGoogleAuthenticated && savedFilters.includes('google')) {
+                // First check if we already have a Google Calendar source to prevent duplicates
+                const hasExistingGoogleSource = calendar.getEventSources().some(source =>
+                    source.url && source.url.includes('google'));
+
+                if (!hasExistingGoogleSource) {
+                    console.log('Adding Google Calendar source during initialization', { apiKey, calendarId, connectedAccount });
+
+                    // Add the Google Calendar source with a unique ID
+                    calendar.addEventSource({
+                        id: 'google-calendar-source',
+                        googleCalendarId: calendarId,
+                        googleCalendarApiKey: apiKey,
+                        className: 'gcal-event',
+                        color: '#0288d1',
+                        textColor: 'white',
+                        cache: false,
+                        extraParams: {
+                            account: connectedAccount,
+                            _: new Date().getTime() // Add timestamp as query param
+                        },
+                        eventDataTransform: function(eventData) {
+                            // Ensure Google events are immediately tagged correctly
+                            if (!eventData.extendedProps) {
+                                eventData.extendedProps = {};
+                            }
+                            eventData.extendedProps.source = 'google';
+                            eventData.extendedProps.googleAccount = connectedAccount;
+                            return eventData;
+                        },
+                        success: function (events) {
+                            console.log(`Google Calendar events loaded successfully for ${connectedAccount}:`, events.length);
+
+                            // Force calendar to re-render all events to ensure they display correctly
+                            setTimeout(() => {
+                                window.calendar.render();
+                            }, 100);
+                        },
+                        failure: function (error) {
+                            console.error('Failed to load Google Calendar events:', error);
                         }
-                        eventData.extendedProps.source = 'google';
-                        return eventData;
-                    },
-                    success: function (events) {
-                        console.log('Google Calendar events loaded successfully:', events.length);
-                    },
-                    failure: function (error) {
-                        console.error('Failed to load Google Calendar events:', error);
-                    }
-                });
+                    });
+                } else {
+                    console.log('Google Calendar source already exists, skipping duplicate addition');
+                }
             } else {
-                console.warn('Missing Google Calendar API key or Calendar ID');
+                if (!isGoogleAuthenticated) {
+                    console.warn('Not authenticated with Google Calendar, events not loaded');
+                } else if (!savedFilters.includes('google')) {
+                    console.warn('Google Calendar filter is off, events not loaded');
+                } else {
+                    console.warn('Missing Google Calendar API key or Calendar ID');
+                }
             }
 
             window.calendar = calendar; // Make calendar globally accessible
@@ -227,7 +264,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     console.log(pair[0] + ': ' + pair[1]);
                 }
 
-                // Fix: Use the correct route path that matches web.php
                 const response = await fetch(`${window.baseUrl}/google/events/${eventId}`, {
                     method: 'POST',
                     body: formData,
@@ -269,6 +305,188 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error deleting Google Calendar event:', error);
                 throw error;
             }
+        },
+
+        // Add a new function to dynamically toggle Google Calendar visibility
+        toggleGoogleEvents: function(enable) {
+            console.log(`Toggle Google Calendar events: ${enable ? 'ON' : 'OFF'}`);
+
+            // First, remove any existing Google sources
+            const existingSources = window.calendar.getEventSources().filter(source =>
+                source.url && source.url.includes('google') || source.id === 'google-calendar-source'
+            );
+
+            existingSources.forEach(source => source.remove());
+
+            // Add events only if enabled
+            if (enable) {
+                const apiKey = document.getElementById('calendar').getAttribute('data-api-key');
+                const calendarId = document.getElementById('calendar').getAttribute('data-calendar-id');
+                const isAuthenticated = document.getElementById('calendar').getAttribute('data-is-authenticated') === 'true';
+                const connectedAccount = sessionStorage.getItem('connected_google_account') || '';
+
+                if (apiKey && calendarId && isAuthenticated) {
+                    window.calendar.addEventSource({
+                        id: 'google-calendar-source',
+                        googleCalendarId: calendarId,
+                        googleCalendarApiKey: apiKey,
+                        className: 'gcal-event',
+                        color: '#0288d1',
+                        textColor: 'white',
+                        cache: false,
+                        extraParams: {
+                            account: connectedAccount,
+                            _: new Date().getTime() // Cache-busting timestamp
+                        },
+                        eventDataTransform: function(eventData) {
+                            if (!eventData.extendedProps) {
+                                eventData.extendedProps = {};
+                            }
+                            eventData.extendedProps.source = 'google';
+                            return eventData;
+                        }
+                    });
+
+                    // Force refresh to ensure events appear immediately
+                    window.calendar.refetchEvents();
+                }
+            }
+        }
+    };
+
+    // Utility function to refresh Google events - accessible globally
+    window.refreshGoogleEvents = function() {
+        if (window.calendar) {
+            console.log('Forcing refresh of Google Calendar events');
+
+            // Check if Google Calendar filter is active
+            const savedFilters = localStorage.getItem('calendarFilters')
+                ? JSON.parse(localStorage.getItem('calendarFilters'))
+                : ['institute', 'sectoral', 'division', 'google'];
+
+            const googleFilterActive = savedFilters.includes('google');
+
+            // Remove all Google event sources first by finding sources with google in URL
+            const googleSources = window.calendar.getEventSources().filter(source =>
+                source.url && source.url.includes('google')
+            );
+
+            if (googleSources.length > 0) {
+                console.log(`Removing ${googleSources.length} existing Google Calendar sources`);
+                googleSources.forEach(source => source.remove());
+            }
+
+            // Also explicitly remove our uniquely identified source if it exists
+            const googleSourceById = window.calendar.getEventSourceById('google-calendar-source');
+            if (googleSourceById) {
+                console.log('Removing Google Calendar source by ID');
+                googleSourceById.remove();
+            }
+
+            // Then remove any remaining Google events that might be lingering
+            const googleEvents = window.calendar.getEvents().filter(event =>
+                event.id.startsWith('google_') ||
+                (event.extendedProps && event.extendedProps.source === 'google')
+            );
+
+            if (googleEvents.length > 0) {
+                console.log(`Found ${googleEvents.length} Google events to remove`);
+                googleEvents.forEach(event => event.remove());
+            }
+
+            // Get current Google account
+            const connectedAccount = sessionStorage.getItem('connected_google_account') || '';
+            const apiKey = document.getElementById('calendar').getAttribute('data-api-key');
+            const calendarId = document.getElementById('calendar').getAttribute('data-calendar-id');
+            const isGoogleAuthenticated = document.getElementById('calendar').getAttribute('data-is-authenticated') === 'true';
+
+            // ONLY add event source back if filter is active AND authenticated
+            if (apiKey && calendarId && connectedAccount && isGoogleAuthenticated && googleFilterActive) {
+                console.log('Adding Google Calendar source with filter check:', { googleFilterActive });
+
+                // Add a short delay before adding the source to ensure removal is complete
+                setTimeout(() => {
+                    window.calendar.addEventSource({
+                        id: 'google-calendar-source',
+                        googleCalendarId: calendarId,
+                        googleCalendarApiKey: apiKey,
+                        className: 'gcal-event',
+                        color: '#0288d1',
+                        textColor: 'white',
+                        cache: false,
+                        extraParams: {
+                            account: connectedAccount,
+                            _: new Date().getTime()  // Cache-busting
+                        },
+                        eventDataTransform: function(eventData) {
+                            if (!eventData.extendedProps) {
+                                eventData.extendedProps = {};
+                            }
+                            eventData.extendedProps.source = 'google';
+                            eventData.extendedProps.googleAccount = connectedAccount;
+                            return eventData;
+                        }
+                    });
+                }, 300);
+            } else {
+                if (!isGoogleAuthenticated) {
+                    console.log('Not authenticated with Google Calendar, events not reloaded');
+                } else if (!googleFilterActive) {
+                    console.log('Google Calendar filter is off, events not reloaded');
+                }
+            }
+
+            // Force refetch of all events
+            window.calendar.refetchEvents();
+        } else {
+            console.warn('Calendar not initialized, cannot refresh Google events');
+        }
+    };
+
+    // New function to completely clear Google events without re-adding them
+    window.clearAllGoogleEvents = function() {
+        if (window.calendar) {
+            console.log('Clearing all Google Calendar events');
+
+            // Remove specifically by ID if it exists
+            const googleSource = window.calendar.getEventSourceById('google-calendar-source');
+            if (googleSource) {
+                console.log('Removing Google Calendar source by ID');
+                googleSource.remove();
+            }
+
+            // Remove all Google Calendar sources that match URL pattern
+            const googleSources = window.calendar.getEventSources().filter(source =>
+                source.url && source.url.includes('google')
+            );
+
+            if (googleSources.length > 0) {
+                console.log(`Removing ${googleSources.length} Google Calendar sources by URL`);
+                googleSources.forEach(source => source.remove());
+            }
+
+            // Then also remove any Google events that might still be in the calendar
+            const googleEvents = window.calendar.getEvents().filter(event =>
+                event.id.startsWith('google_') ||
+                (event.extendedProps && event.extendedProps.source === 'google')
+            );
+
+            if (googleEvents.length > 0) {
+                console.log(`Found ${googleEvents.length} Google events to remove`);
+                googleEvents.forEach(event => event.remove());
+            }
+
+            // Update calendar display
+            window.calendar.render();
+
+            // Set Google authentication attribute to false on calendar element
+            const calendarEl = document.getElementById('calendar');
+            if (calendarEl) {
+                calendarEl.setAttribute('data-is-authenticated', 'false');
+                console.log('Set calendar Google authentication status to false');
+            }
+        } else {
+            console.warn('Calendar not initialized, cannot clear Google events');
         }
     };
 });

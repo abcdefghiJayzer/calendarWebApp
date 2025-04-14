@@ -4,40 +4,38 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\GoogleAuthController;
 
-// Make root route explicit with GET method
-Route::get('/', [CalendarController::class, 'index'])->name('home');
+// Authentication Routes
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('login');
+    Route::post('/login', [App\Http\Controllers\Auth\LoginController::class, 'login']);
+});
 
-// Base routes
-Route::get('/events', [CalendarController::class, 'getEvents'])->name('getEvents');
+Route::middleware('auth')->group(function () {
+    Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout');
+});
 
-// Show event details
-Route::get('/events/{id}', [CalendarController::class, 'show'])->name('show');
+// Protect calendar routes with auth middleware
+Route::middleware('auth')->group(function () {
+    Route::get('/', [CalendarController::class, 'index'])->name('home');
+    Route::get('/events', [CalendarController::class, 'getEvents'])->name('getEvents');
+    Route::get('/events/{id}', [CalendarController::class, 'show'])->name('events.show');
+    Route::post('/events', [CalendarController::class, 'store'])->name('events.store');
+    Route::post('/events/{id}', [CalendarController::class, 'update'])->name('events.update');
+    Route::delete('/events/{id}', [CalendarController::class, 'destroy'])->name('events.destroy');
+    Route::post('/check-conflicts', [CalendarController::class, 'checkGuestConflicts'])->name('check-conflicts');
 
-// Create event
-Route::get('/create', [CalendarController::class, 'create'])->name('create');
-Route::post('/store', [CalendarController::class, 'store'])->name('store');
+    // Google Calendar OAuth routes
+    Route::get('/google/auth', [GoogleAuthController::class, 'redirect'])->name('google.auth');
+    Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
+    Route::get('/oauth/callback', [GoogleAuthController::class, 'callback'])->name('oauth.callback');
+    Route::get('/google/disconnect', [GoogleAuthController::class, 'disconnect'])->name('google.disconnect');
+    Route::get('/google/status', [GoogleAuthController::class, 'status'])->name('google.status');
 
-// Edit/Update event
-Route::put('/events/{id}', [CalendarController::class, 'update'])->name('update');
-Route::post('/events/{id}', [CalendarController::class, 'update']); // Handle POST requests with _method=PUT
-
-// Delete event
-Route::delete('/events/{id}', [CalendarController::class, 'destroy'])->name('destroy');
-
-// Check for guest conflicts
-Route::post('/check-conflicts', [CalendarController::class, 'checkGuestConflicts'])->name('check-conflicts');
-
-// Google Calendar OAuth routes
-Route::get('/google/auth', [GoogleAuthController::class, 'redirect'])->name('google.auth');
-Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
-Route::get('/oauth/callback', [GoogleAuthController::class, 'callback'])->name('oauth.callback');
-Route::get('/google/disconnect', [GoogleAuthController::class, 'disconnect'])->name('google.disconnect');
-Route::get('/google/status', [GoogleAuthController::class, 'status'])->name('google.status');
-
-// Google Calendar event CRUD routes - Make sure these match the paths used in JS
-Route::post('/google/events', [CalendarController::class, 'storeGoogleEvent'])->name('google.events.store');
-Route::post('/google/events/{eventId}', [CalendarController::class, 'updateGoogleEvent'])->name('google.events.update');
-Route::delete('/google/events/{eventId}', [CalendarController::class, 'destroyGoogleEvent'])->name('google.events.destroy');
+    // Google Calendar event CRUD routes
+    Route::post('/google/events', [CalendarController::class, 'storeGoogleEvent'])->name('google.events.store');
+    Route::post('/google/events/{eventId}', [CalendarController::class, 'updateGoogleEvent'])->name('google.events.update');
+    Route::delete('/google/events/{eventId}', [CalendarController::class, 'destroyGoogleEvent'])->name('google.events.destroy');
+});
 
 // Debug route to view session data
 Route::get('/debug/session', function() {

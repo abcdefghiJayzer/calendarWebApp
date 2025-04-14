@@ -53,7 +53,11 @@ class GoogleAuthController extends Controller
                     'has_refresh_token' => isset($token['refresh_token'])
                 ]);
 
-                return redirect()->route('home')->with('success', 'Successfully connected to Google Calendar!');
+                // Only use one flag to control the behavior - prevent duplicates
+                return redirect()->route('home')->with([
+                    'success' => 'Successfully connected to Google Calendar!',
+                    'google_calendar_action' => 'enable_and_refresh'
+                ]);
             } else {
                 Log::error('No code in callback request', ['query' => $request->query()]);
                 return redirect()->route('home')->with('error', 'Failed to connect to Google Calendar: No authorization code received');
@@ -66,38 +70,33 @@ class GoogleAuthController extends Controller
 
     public function disconnect()
     {
+        // Make sure we completely remove any Google token data
         Session::forget('google_token');
+        Session::forget('google_calendar_email');
+
+        // Also remove any cached Google events data
+        Session::forget('google_events');
+        Session::forget('google_calendar_last_sync');
         Session::save();
-        Log::info('Disconnected from Google Calendar');
-        return redirect()->route('home')->with('success', 'Disconnected from Google Calendar.');
+
+        Log::info('User disconnected from Google Calendar');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Disconnected from Google Calendar.',
+            'forceRefresh' => true
+        ]);
     }
 
     public function status()
     {
         $isAuthenticated = $this->googleCalendarService->isAuthenticated();
-        Log::info('Google Calendar authentication status check', [
-            'authenticated' => $isAuthenticated,
-            'session_id' => Session::getId()
-        ]);
-
-        $sessionData = Session::has('google_token') ? 'exists' : 'missing';
-        $tokenDetails = [];
-
-        if (Session::has('google_token')) {
-            $token = Session::get('google_token');
-            $tokenDetails = [
-                'token_type' => $token['token_type'] ?? 'unknown',
-                'expires_in' => $token['expires_in'] ?? 'unknown',
-                'created' => $token['created'] ?? 'unknown',
-                'has_access_token' => isset($token['access_token']),
-                'has_refresh_token' => isset($token['refresh_token']),
-            ];
-        }
+        $userEmail = $this->googleCalendarService->getUserEmail();
 
         return response()->json([
             'authenticated' => $isAuthenticated,
-            'session_token' => $sessionData,
-            'token_details' => $tokenDetails
+            'email' => $userEmail,
+            'sessionData' => Session::has('google_token') ? 'exists' : 'missing'
         ]);
     }
 }

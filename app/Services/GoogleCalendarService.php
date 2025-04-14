@@ -335,4 +335,20 @@ class GoogleCalendarService
 
         return $colorMap[$hexColor] ?? '1'; // Default to blue (1) if no match
     }
+
+    public function getUserEmail()
+    {
+        if (!$this->isAuthenticated()) {
+            return null;
+        }
+
+        try {
+            $oauth2 = new \Google_Service_Oauth2($this->client);
+            $userInfo = $oauth2->userinfo->get();
+            return $userInfo->getEmail();
+        } catch (Exception $e) {
+            Log::error('Error getting Google user email', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
 }

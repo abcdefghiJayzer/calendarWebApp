@@ -10,7 +10,7 @@
                 </button>
             </div>
 
-            <form id="add-event-form" action="{{ route('store') }}" method="POST" class="space-y-4">
+            <form id="add-event-form" action="{{ route('events.store') }}" method="POST" class="space-y-4">
                 @csrf
 
                 <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
