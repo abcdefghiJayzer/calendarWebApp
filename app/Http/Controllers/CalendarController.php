@@ -14,6 +14,8 @@ class CalendarController extends Controller
     public function __construct(GoogleCalendarService $googleCalendarService)
     {
         $this->googleCalendarService = $googleCalendarService;
+        // Apply division middleware to store and update methods
+        $this->middleware('division')->only(['store', 'update']);
     }
 
     public function index(Request $request)
@@ -34,49 +36,88 @@ class CalendarController extends Controller
 
     public function getEvents()
     {
-        $events = Event::with('participants')
-            ->select(
-                'id',
-                'title',
-                'start_date as start',
-                'end_date as end',
-                'location',
-                'color as backgroundColor',
-                'description',
-                'is_all_day as allDay',
-                'calendar_type',
-                'private',
-                'user_id'
-            )
-            ->get()
-            ->map(function ($event) {
-                $data = $event->toArray();
+        $user = auth()->user();
+        $isAdmin = $user->division === 'institute';
+        $isDivisionHead = $user->is_division_head;
 
-                // Hide details if event is private and user is not the owner
-                if ($event->private && $event->user_id !== auth()->id()) {
-                    $data['title'] = 'Private Event';
-                    $data['backgroundColor'] = '#808080'; // Grey color for private events
-                    $data['extendedProps'] = [
-                        'description' => 'Private event - Details hidden',
-                        'location' => null,
-                        'guests' => [],
-                        'calendarType' => $event->calendar_type,
-                        'private' => true,
-                        'user_id' => $event->user_id
-                    ];
-                } else {
-                    $data['extendedProps'] = [
-                        'description' => $event->description,
-                        'location' => $event->location,
-                        'guests' => $event->participants->pluck('email'),
-                        'calendarType' => $event->calendar_type,
-                        'private' => $event->private,
-                        'user_id' => $event->user_id
-                    ];
-                }
+        // Start with a base query
+        $eventsQuery = Event::with('participants');
 
-                return $data;
+        if ($isAdmin) {
+            // Admin sees all events
+            $eventsQuery->where('calendar_type', 'institute');
+        } else if ($isDivisionHead) {
+            // Division heads see institute events, their sector events, and their division events
+            $userSector = explode('_', $user->division)[0];
+            $eventsQuery->where(function($query) use ($user, $userSector) {
+                $query->where('calendar_type', 'institute')
+                      ->orWhere('calendar_type', $userSector)
+                      ->orWhere('calendar_type', $user->division);
             });
+        } else {
+            // Regular users only see institute events and their division events
+            $eventsQuery->where(function($query) use ($user) {
+                $query->where('calendar_type', 'institute')
+                      ->orWhere('calendar_type', $user->division);
+            });
+        }
+
+        $events = $eventsQuery->select(
+            'id',
+            'title',
+            'start_date as start',
+            'end_date as end',
+            'location',
+            'color as backgroundColor',
+            'description',
+            'is_all_day as allDay',
+            'calendar_type',
+            'private',
+            'user_id'
+        )
+        ->get()
+        ->map(function ($event) {
+            $data = $event->toArray();
+
+            // Map database calendar_type values to filter values
+            $calendarTypeMap = [
+                'Institute Level' => 'institute',
+                'Sectoral' => 'sectoral',
+                'Sector 1' => 'sector1',
+                'Sector 2' => 'sector2',
+                'Sector 3' => 'sector3',
+                'Sector 4' => 'sector4',
+                'Division 1' => 'sector1_div1', // Default to Sector 1's Division 1
+            ];
+
+            // Get the mapped calendar type or keep original if no mapping exists
+            $mappedCalendarType = $calendarTypeMap[$event->calendar_type] ?? $event->calendar_type;
+
+            // Hide details if event is private and user is not the owner
+            if ($event->private && $event->user_id !== auth()->id()) {
+                $data['title'] = 'Private Event';
+                $data['backgroundColor'] = '#808080'; // Grey color for private events
+                $data['extendedProps'] = [
+                    'description' => 'Private event - Details hidden',
+                    'location' => null,
+                    'guests' => [],
+                    'calendarType' => $mappedCalendarType,
+                    'private' => true,
+                    'user_id' => $event->user_id
+                ];
+            } else {
+                $data['extendedProps'] = [
+                    'description' => $event->description,
+                    'location' => $event->location,
+                    'guests' => $event->participants->pluck('email'),
+                    'calendarType' => $mappedCalendarType,
+                    'private' => $event->private,
+                    'user_id' => $event->user_id
+                ];
+            }
+
+            return $data;
+        });
         return response()->json($events);
     }
 
@@ -114,7 +155,9 @@ class CalendarController extends Controller
 
     public function create()
     {
-        return view('add');
+        // Get user's division to pass to view for pre-selecting
+        $userDivision = auth()->user()->division;
+        return view('add', compact('userDivision'));
     }
 
     public function store(Request $request)
@@ -129,8 +172,19 @@ class CalendarController extends Controller
                 'color' => 'required|string',
                 'guests' => 'nullable|string', // JSON string of guest emails
                 'is_all_day' => 'nullable|boolean',
-                'calendar_type' => 'required|in:institute,sectoral,division',
+                'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
             ]);
+
+            // Check if the user has permission to create events in this division
+            $user = auth()->user();
+            $calendarType = $request->calendar_type;
+
+            if (!$user->canCreateEventsIn($calendarType)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'You do not have permission to create events in this division.'
+                ], 403);
+            }
 
             $event = Event::create([
                 'title' => $request->title,
@@ -142,7 +196,7 @@ class CalendarController extends Controller
                 'is_all_day' => $request->is_all_day ?? false,
                 'status' => $request->status ?? 'pending',
                 'color' => $request->color,
-                'calendar_type' => $request->calendar_type ?? 'division',
+                'calendar_type' => $calendarType,
                 'private' => $request->boolean('private'),
             ]);
 
@@ -175,6 +229,12 @@ class CalendarController extends Controller
     public function edit(string $id)
     {
         $event = Event::findOrFail($id);
+
+        // Check if user can edit this event based on division
+        if (!auth()->user()->canCreateEventsIn($event->calendar_type)) {
+            return redirect()->route('home')->with('error', 'You do not have permission to edit this event.');
+        }
+
         return view('edit', compact('event'));
     }
 
@@ -182,6 +242,15 @@ class CalendarController extends Controller
     {
         try {
             $event = Event::findOrFail($id);
+
+            // Check if user can edit this event based on division
+            if (!auth()->user()->canCreateEventsIn($event->calendar_type) &&
+                !auth()->user()->canCreateEventsIn($request->calendar_type)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'You do not have permission to edit this event or change to this division.'
+                ], 403);
+            }
 
             $request->validate([
                 'title' => 'required|string|max:255',
@@ -192,7 +261,7 @@ class CalendarController extends Controller
                 'location' => 'nullable|string|max:255',
                 'color' => 'required|string|max:20',
                 'is_all_day' => 'boolean',
-                'calendar_type' => 'required|in:institute,sectoral,division',
+                'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
             ]);
 
             // Properly handle the is_all_day checkbox (might come as "0", "1", true, false, or not be present)
@@ -310,9 +379,16 @@ class CalendarController extends Controller
                 'start_date' => 'required|date',
                 'end_date' => 'nullable|date|after_or_equal:start_date',
                 'location' => 'nullable|string',
-                'color' => 'required|string',
+                'color' => 'nullable|string',
                 'guests' => 'nullable|string',
             ]);
+
+            // Add validation for calendar_type if it's present
+            if ($request->has('calendar_type')) {
+                $request->validate([
+                    'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
+                ]);
+            }
 
             $data = [
                 'title' => $request->title,

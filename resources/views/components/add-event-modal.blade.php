@@ -33,11 +33,45 @@
                     <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
                     <div class="border p-2 rounded">
                         <select name="calendar_type" id="calendar_type" required class="outline-none border-none w-full">
-                            <option value="institute">Institute Level</option>
-                            <option value="sectoral">Sectoral</option>
-                            <option value="division" selected>Division</option>
+                            @if(auth()->user()->division === 'institute')
+                                <option value="institute">Institute Level</option>
+                                <optgroup label="Sector 1">
+                                    <option value="sector1">Sector 1 (Main)</option>
+                                    <option value="sector1_div1">Sector 1 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 2">
+                                    <option value="sector2">Sector 2 (Main)</option>
+                                    <option value="sector2_div1">Sector 2 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 3">
+                                    <option value="sector3">Sector 3 (Main)</option>
+                                    <option value="sector3_div1">Sector 3 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 4">
+                                    <option value="sector4">Sector 4 (Main)</option>
+                                    <option value="sector4_div1">Sector 4 - Division 1</option>
+                                </optgroup>
+                            @elseif(auth()->user()->is_division_head)
+                                @php
+                                    // For division heads, extract their sector from their division
+                                    $userDivision = auth()->user()->division;
+                                    $userSector = explode('_', $userDivision)[0]; // e.g., sector1_div1 -> sector1
+                                @endphp
+                                <option value="{{ $userSector }}">{{ ucfirst(str_replace('_', ' - ', $userSector)) }} (Main)</option>
+                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }}</option>
+                            @else
+                                <!-- For regular users, only show their division -->
+                                <option value="{{ auth()->user()->division }}">
+                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
+                                </option>
+                            @endif
                         </select>
                     </div>
+                    @if(auth()->user()->is_division_head)
+                        <p class="text-xs text-gray-500 mt-1">As a division head, you can create events for your sector or division.</p>
+                    @elseif(auth()->user()->division !== 'institute')
+                        <p class="text-xs text-gray-500 mt-1">You can only create events in your assigned division.</p>
+                    @endif
                 </div>
 
                 <div>
@@ -234,6 +268,14 @@
                 }
             }
         });
+
+        // Initialize calendar type based on user's division
+        const userDivision = "{{ auth()->user()->division }}";
+        const calendarTypeSelect = document.getElementById('calendar_type');
+
+        if (calendarTypeSelect) {
+            calendarTypeSelect.value = userDivision;
+        }
     });
 
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {

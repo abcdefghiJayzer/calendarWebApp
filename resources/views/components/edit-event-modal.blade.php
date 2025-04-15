@@ -17,12 +17,45 @@
                 <div class="mb-4">
                     <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
                     <div class="border p-2 rounded">
-                        <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
-                            <option value="institute">Institute Level</option>
-                            <option value="sectoral">Sectoral</option>
-                            <option value="division">Division</option>
+                        <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full"
+                                {{ auth()->user()->division !== 'institute' ? 'disabled' : '' }}>
+                            @if(auth()->user()->division === 'institute')
+                                <option value="institute">Institute Level</option>
+                                <optgroup label="Sector 1">
+                                    <option value="sector1">Sector 1 (Main)</option>
+                                    <option value="sector1_div1">Sector 1 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 2">
+                                    <option value="sector2">Sector 2 (Main)</option>
+                                    <option value="sector2_div1">Sector 2 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 3">
+                                    <option value="sector3">Sector 3 (Main)</option>
+                                    <option value="sector3_div1">Sector 3 - Division 1</option>
+                                </optgroup>
+                                <optgroup label="Sector 4">
+                                    <option value="sector4">Sector 4 (Main)</option>
+                                    <option value="sector4_div1">Sector 4 - Division 1</option>
+                                </optgroup>
+                            @elseif(auth()->user()->is_division_head)
+                                <!-- For non-admin users, only show their division -->
+                                <option value="{{ auth()->user()->division }}">
+                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
+                                </option>
+                            @else
+                                <!-- For regular users, only show their division -->
+                                <option value="{{ auth()->user()->division }}">
+                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
+                                </option>
+                            @endif
                         </select>
                     </div>
+                    @if(auth()->user()->is_division_head)
+                        <p class="text-xs text-gray-500 mt-1">As a division head, you can modify events for your sector or division.</p>
+                    @elseif(auth()->user()->division !== 'institute')
+                        <input type="hidden" name="calendar_type" value="{{ auth()->user()->division }}">
+                        <p class="text-xs text-gray-500 mt-1">You can only create events in your assigned division.</p>
+                    @endif
                 </div>
 
                 <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
@@ -291,6 +324,38 @@ window.openEditModal = function(event) {
             return;
         }
     }
+
+    // For non-institute users, check if they can edit this event
+    const userDivision = "{{ auth()->user()->division }}";
+    const userIsDivisionHead = {{ auth()->user()->is_division_head ? 'true' : 'false' }};
+    const eventDivision = eventData.extendedProps.calendarType ||
+                         (eventData.extendedProps.calendar_type || 'institute');
+
+    // For division heads, extract their sector from their division
+    const userSector = userDivision.split('_')[0]; // e.g., sector1_div1 -> sector1
+
+    // Access check
+    if (userDivision !== 'institute') {
+        let hasAccess = false;
+
+        if (userIsDivisionHead) {
+            // Division heads can access their division and sector
+            hasAccess = eventDivision === userDivision || eventDivision === userSector;
+        } else {
+            // Regular users can only access their division
+            hasAccess = eventDivision === userDivision;
+        }
+
+        if (!hasAccess) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission Denied',
+                text: 'You do not have permission to edit events in this division.',
+                confirmButtonColor: '#22c55e'
+            });
+            return;
+        }
+    }
 };
 
 // Also make closeEditModal globally available
@@ -335,7 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Color option handling
     document.querySelectorAll(".edit-color-option input").forEach(option => {
-        option.addEventListener("change", function() {
+        option.addEventListener("change", function() {}
             document.querySelectorAll(".edit-color-option").forEach(el => {
                 el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
             });
@@ -522,7 +587,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Replace the click outside handler
-document.addEventListener('mousedown', function(event) {
+document.addEventListener('mousedown', function(event) {}
     if (document.querySelector('.swal2-container')) {
         return;
     }

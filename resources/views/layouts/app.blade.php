@@ -13,38 +13,24 @@
     <script>
         // Initialize Swal globally
         window.Swal = Swal;
+        // Store user information for JavaScript access
+        window.userInfo = {
+            division: "{{ auth()->user()->division }}",
+            isDivisionHead: {{ auth()->user()->is_division_head ? 'true' : 'false' }},
+            isAdmin: {{ auth()->user()->division === 'institute' ? 'true' : 'false' }}
+        };
     </script>
 </head>
 
-<body>
+<body data-user-division="{{ auth()->user()->division }}" data-is-division-head="{{ auth()->user()->is_division_head ? 'true' : 'false' }}">
     <div class="flex h-screen">
         <!-- Sidebar -->
         <x-sidebar />
 
         <!-- Main content -->
         <div class="flex flex-col flex-1 ml-64">
-            <!-- Top navigation bar -->
-            <header class="bg-white shadow-sm">
-                <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                    <h1 class="text-xl font-semibold text-gray-900">Calendar</h1>
-
-                    <!-- User menu -->
-                    @auth
-                        <div class="flex items-center">
-                            <span class="text-gray-700 mr-4">{{ Auth::user()->name }}</span>
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="text-gray-600 hover:text-gray-900">
-                                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
-                                </button>
-                            </form>
-                        </div>
-                    @endauth
-                </div>
-            </header>
-
             <!-- Page content -->
-            <main class="flex-1 p-4">
+            <main class="flex-1">
                 @if(session('success'))
                     <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4" role="alert">
                         {{ session('success') }}
