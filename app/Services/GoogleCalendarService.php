@@ -5,8 +5,10 @@ namespace App\Services;
 use Google_Client;
 use Google_Service_Calendar;
 use Google_Service_Calendar_Event;
+use Google_Service_Oauth2;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use Exception;
 
 class GoogleCalendarService
@@ -17,15 +19,15 @@ class GoogleCalendarService
 
     public function __construct()
     {
-        $this->calendarId = config('services.google.calendar.calendar_id');
-
         try {
+            // Initialize the client first, regardless of calendar ID status
             $this->client = new Google_Client();
             $this->client->setApplicationName('Calendar Web App');
             // Make sure we're using the full calendar scope, not just readonly
             $this->client->setScopes([
-                Google_Service_Calendar::CALENDAR,  // Full access
-                // Note: CALENDAR_READONLY would not allow updates/deletes
+                \Google_Service_Calendar::CALENDAR,  // Full access
+                'https://www.googleapis.com/auth/userinfo.email', // For getting user email
+                'https://www.googleapis.com/auth/userinfo.profile', // For getting user profile
             ]);
 
             \Log::info('Google client initialized with scopes', [
@@ -49,29 +51,29 @@ class GoogleCalendarService
             Log::info('Setting Google OAuth redirect URI', ['uri' => $redirectUri]);
             $this->client->setRedirectUri($redirectUri);
 
-            // Load previously authorized token if it exists - check both session and cache
+            // Load previously authorized token if it exists
             if (Session::has('google_token')) {
                 $token = Session::get('google_token');
-                Log::info('Found Google token in session', [
+                \Log::info('Found Google token in session', [
                     'token_type' => $token['token_type'] ?? 'unknown',
                     'expires_in' => $token['expires_in'] ?? 'unknown',
                     'created' => $token['created'] ?? 'unknown',
                 ]);
                 $this->client->setAccessToken($token);
             } else {
-                Log::info('No Google token in session');
+                \Log::info('No Google token in session');
             }
 
             // Refresh the token if needed
             if ($this->client->isAccessTokenExpired()) {
-                Log::info('Access token is expired');
+                \Log::info('Access token is expired');
                 if ($this->client->getRefreshToken()) {
-                    Log::info('Refreshing expired Google token with refresh token');
+                    \Log::info('Refreshing expired Google token with refresh token');
                     $this->client->fetchAccessTokenWithRefreshToken($this->client->getRefreshToken());
                     $newToken = $this->client->getAccessToken();
                     // Store the new token in session
                     Session::put('google_token', $newToken);
-                    Log::info('Token refreshed successfully', [
+                    \Log::info('Token refreshed successfully', [
                         'new_token' => [
                             'token_type' => $newToken['token_type'] ?? 'unknown',
                             'expires_in' => $newToken['expires_in'] ?? 'unknown',
@@ -79,12 +81,58 @@ class GoogleCalendarService
                         ]
                     ]);
                 } else {
-                    Log::warning('Google token is expired and no refresh token available');
+                    \Log::warning('Google token is expired and no refresh token available');
                 }
             }
 
-            $this->service = new Google_Service_Calendar($this->client);
+            // Initialize the Calendar service
+            $this->service = new \Google_Service_Calendar($this->client);
 
+            // Check if we're in an OAuth callback or authentication flow
+            $isInAuthFlow = request()->is('oauth/callback') ||
+                           request()->is('google/auth') ||
+                           request()->is('google/callback');
+
+            // Check if we're on a page that specifically needs Google Calendar data
+            $needsCalendar = request()->is('events*') ||
+                            request()->routeIs('events.*') ||
+                            request()->ajax();
+
+            // Set the calendar ID - always use 'primary' to access the user's default calendar
+            if ($this->isAuthenticated()) {
+                // If authenticated, always use 'primary' for the user's main calendar
+                $this->calendarId = 'primary';
+                \Log::info('Using "primary" as calendar ID for authenticated user');
+            } else if ($needsCalendar) {
+                // We're on a calendar page but not authenticated
+                // Just use primary as placeholder - methods will handle auth requirements
+                $this->calendarId = 'primary';
+                \Log::info('No Google Calendar auth but on calendar page - using placeholder ID');
+            } else {
+                // Not authenticated and not on calendar page
+                $this->calendarId = null;
+                \Log::info('No Google Calendar authentication found, calendar ID set to null');
+            }
+
+            // Still store the google_calendar_id in the user record for reference
+            if ($this->isAuthenticated()) {
+                $user = Auth::user();
+                if ($user && !$user->google_calendar_id) {
+                    try {
+                        $email = $this->getUserEmail();
+                        if ($email) {
+                            $user->google_calendar_id = $email;
+                            $user->save();
+                            \Log::info('Auto-saved Google Calendar ID', [
+                                'user_id' => $user->id,
+                                'google_calendar_id' => $email
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning('Failed to auto-save Google Calendar ID', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
         } catch (Exception $e) {
             Log::error('Error initializing Google Calendar Service', ['error' => $e->getMessage()]);
             throw $e;
@@ -170,17 +218,45 @@ class GoogleCalendarService
 
     public function getEvents($options = [])
     {
-        if (!$this->isAuthenticated()) {
+        try {
+            if (!$this->isAuthenticated()) {
+                Log::warning('Not authenticated with Google Calendar when trying to get events');
+                return [];
+            }
+
+            if (!$this->calendarId) {
+                Log::warning('No Calendar ID available when trying to get events');
+                return [];
+            }
+
+            Log::info('Fetching Google events with calendar ID: ' . $this->calendarId, [
+                'options' => $options,
+                'token_exists' => Session::has('google_token'),
+                'user_id' => Auth::id()
+            ]);
+
+            $results = $this->service->events->listEvents($this->calendarId, $options);
+
+            $itemCount = count($results->getItems());
+            Log::info('Successfully retrieved Google Calendar events', [
+                'count' => $itemCount,
+                'calendar_id' => $this->calendarId
+            ]);
+
+            return $results->getItems();
+        } catch (\Exception $e) {
+            Log::error('Error getting Google Calendar events', [
+                'error' => $e->getMessage(),
+                'calendar_id' => $this->calendarId ?? 'none',
+                'trace' => $e->getTraceAsString()
+            ]);
             return [];
         }
-
-        $results = $this->service->events->listEvents($this->calendarId, $options);
-        return $results->getItems();
     }
 
     public function getEvent($eventId)
     {
-        if (!$this->isAuthenticated()) {
+        if (!$this->isAuthenticated() || !$this->calendarId) {
             return null;
         }
 
@@ -193,7 +269,11 @@ class GoogleCalendarService
             throw new Exception('Not authenticated with Google Calendar');
         }
 
-        $event = new Google_Service_Calendar_Event([
+        if (!$this->calendarId) {
+            throw new Exception('No Google Calendar ID available');
+        }
+
+        $event = new \Google_Service_Calendar_Event([
             'summary' => $data['title'],
             'description' => $data['description'] ?? '',
             'start' => [
@@ -223,6 +303,10 @@ class GoogleCalendarService
     {
         if (!$this->isAuthenticated()) {
             throw new Exception('Not authenticated with Google Calendar');
+        }
+
+        if (!$this->calendarId) {
+            throw new Exception('No Google Calendar ID available');
         }
 
         try {
@@ -293,6 +377,10 @@ class GoogleCalendarService
             throw new Exception('Not authenticated with Google Calendar');
         }
 
+        if (!$this->calendarId) {
+            throw new Exception('No Google Calendar ID available');
+        }
+
         try {
             \Log::info('Deleting Google Calendar event', [
                 'eventId' => $eventId,
@@ -338,16 +426,40 @@ class GoogleCalendarService
 
     public function getUserEmail()
     {
-        if (!$this->isAuthenticated()) {
-            return null;
-        }
-
         try {
+            // Check if we have a token first
+            if (!Session::has('google_token')) {
+                Log::warning('Cannot get user email - no token in session');
+                return null;
+            }
+
+            $token = Session::get('google_token');
+            // Make sure we're using the token properly
+            $this->client->setAccessToken($token);
+
+            // Create a new OAuth2 service for user info
             $oauth2 = new \Google_Service_Oauth2($this->client);
             $userInfo = $oauth2->userinfo->get();
-            return $userInfo->getEmail();
-        } catch (Exception $e) {
-            Log::error('Error getting Google user email', ['error' => $e->getMessage()]);
+            $email = $userInfo->getEmail();
+
+            if (empty($email)) {
+                Log::warning('Retrieved empty Google user email');
+                return null;
+            }
+
+            Log::info('Successfully retrieved Google user email', ['email' => $email]);
+
+            // Additional debug for flow tracking
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+            $caller = isset($backtrace[1]['function']) ? $backtrace[1]['function'] : 'unknown';
+            Log::info('getUserEmail called from', ['caller' => $caller]);
+
+            return $email;
+        } catch (\Exception $e) {
+            Log::error('Error getting Google user email', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return null;
         }
     }

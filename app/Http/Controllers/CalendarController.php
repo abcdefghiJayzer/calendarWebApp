@@ -118,6 +118,19 @@ class CalendarController extends Controller
 
             return $data;
         });
+
+        // Get Google Calendar events and combine with local events
+        $googleEvents = $this->getGoogleEvents();
+
+        // Log both events for debugging
+        \Log::info('Local events count: ' . count($events));
+        \Log::info('Google events count: ' . count($googleEvents));
+
+        // Merge arrays
+        if (!empty($googleEvents)) {
+            $events = $events->concat($googleEvents);
+        }
+
         return response()->json($events);
     }
 
@@ -526,6 +539,111 @@ class CalendarController extends Controller
         } catch (\Exception $e) {
             \Log::error('Google event deletion error: ' . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    protected function getGoogleEvents()
+    {
+        try {
+            if (!$this->googleCalendarService->isAuthenticated()) {
+                \Log::info('User not authenticated with Google Calendar');
+                return [];
+            }
+
+            // Debug user's Google Calendar ID
+            $user = \Auth::user();
+            \Log::info('User google_calendar_id:', [
+                'user_id' => $user->id,
+                'google_calendar_id' => $user->google_calendar_id
+            ]);
+
+            // Fetch events from Google Calendar
+            $googleEvents = $this->googleCalendarService->getEvents([
+                'timeMin' => date('c', strtotime('-30 days')),
+                'timeMax' => date('c', strtotime('+60 days')),
+                'singleEvents' => true,
+                'orderBy' => 'startTime',
+            ]);
+
+            \Log::info('Raw Google events fetched:', ['count' => count($googleEvents)]);
+
+            // Format Google events to match the format expected by the calendar
+            $formattedEvents = [];
+
+            foreach ($googleEvents as $event) {
+                // Extract start and end date information
+                $start = null;
+                $end = null;
+                $isAllDay = false;
+
+                if ($event->getStart()->getDate()) {
+                    // All day event
+                    $start = $event->getStart()->getDate();
+                    $end = $event->getEnd()->getDate();
+                    $isAllDay = true;
+                } else {
+                    // Timed event
+                    $start = $event->getStart()->getDateTime();
+                    $end = $event->getEnd()->getDateTime();
+                }
+
+                // Get attendees if any
+                $attendees = [];
+                if ($event->getAttendees()) {
+                    foreach ($event->getAttendees() as $attendee) {
+                        $attendees[] = $attendee->getEmail();
+                    }
+                }
+
+                // Map Google color ID to hex color
+                $colorMap = [
+                    '1' => '#3b82f6', // Blue
+                    '2' => '#22c55e', // Green
+                    '3' => '#a855f7', // Purple
+                    '4' => '#ec4899', // Pink
+                    '5' => '#eab308', // Yellow
+                    '6' => '#f97316', // Orange
+                    '7' => '#14b8a6', // Teal
+                    '8' => '#64748b', // Gray
+                    '9' => '#6b7280', // Cool Gray
+                    '10' => '#8b5cf6', // Indigo
+                    '11' => '#ef4444', // Red
+                ];
+
+                $backgroundColor = '#3b82f6'; // Default blue
+                if ($event->getColorId() && isset($colorMap[$event->getColorId()])) {
+                    $backgroundColor = $colorMap[$event->getColorId()];
+                }
+
+                // Format the event data for the calendar
+                $formattedEvents[] = [
+                    'id' => 'google_' . $event->getId(),  // Prefix with 'google_' to identify as Google event
+                    'title' => $event->getSummary(),
+                    'start' => $start,
+                    'end' => $end,
+                    'allDay' => $isAllDay,
+                    'backgroundColor' => $backgroundColor,
+                    'borderColor' => 'transparent',
+                    'classNames' => ['gcal-event'],
+                    'source' => 'google',
+                    'extendedProps' => [
+                        'description' => $event->getDescription(),
+                        'location' => $event->getLocation(),
+                        'guests' => $attendees,
+                        'calendarType' => 'google',
+                        'source' => 'google'
+                    ]
+                ];
+            }
+
+            \Log::info('Formatted Google events:', ['count' => count($formattedEvents)]);
+            return $formattedEvents;
+
+        } catch (\Exception $e) {
+            \Log::error('Error fetching Google Calendar events: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return [];
         }
     }
 }

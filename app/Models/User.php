@@ -20,9 +20,10 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'google_calendar_id',
         'password',
         'division',
-        'is_division_head', // Add this line
+        'is_division_head',
     ];
 
     /**

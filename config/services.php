@@ -34,7 +34,7 @@ return [
     'google' => [
         'calendar' => [
             'api_key' => env('GOOGLE_CALENDAR_API_KEY'),
-            'calendar_id' => env('GOOGLE_CALENDAR_ID'),
+            // No longer using env variable for calendar_id
         ],
     ],
 
