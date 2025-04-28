@@ -49,38 +49,52 @@
             <div class="space-y-2">
                 <label class="flex items-center text-white cursor-pointer">
                     <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="institute">
-                    <span class="ml-2">Institute Level</span>
+                    <span class="ml-2">Institute-wide Events</span>
                 </label>
 
                 @if(auth()->user()->division === 'institute')
-                    <!-- Admin-only filters -->
-                    <label class="flex items-center text-white cursor-pointer">
-                        <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="sectoral">
-                        <span class="ml-2">Sectoral Events</span>
-                    </label>
-
-                    <label class="flex items-center text-white cursor-pointer">
-                        <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="division_head">
-                        <span class="ml-2">Division Head Events</span>
-                    </label>
+                    <!-- Admin-only filters, grouped by sector with divisions as sub-items -->
+                    <div class="ml-2">
+                        <span class="text-green-200 text-xs">Sectors</span>
+                        <div class="mb-1">
+                            <label class="flex items-center text-white cursor-pointer ml-2">
+                                <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="sector1">
+                                <span class="ml-2 font-semibold">Sector 1 Events</span>
+                            </label>
+                        </div>
+                        <div class="mb-1">
+                            <label class="flex items-center text-white cursor-pointer ml-2">
+                                <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="sector2">
+                                <span class="ml-2 font-semibold">Sector 2 Events</span>
+                            </label>
+                        </div>
+                        <div class="mb-1">
+                            <label class="flex items-center text-white cursor-pointer ml-2">
+                                <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="sector3">
+                                <span class="ml-2 font-semibold">Sector 3 Events</span>
+                            </label>
+                        </div>
+                        <div class="mb-1">
+                            <label class="flex items-center text-white cursor-pointer ml-2">
+                                <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="sector4">
+                                <span class="ml-2 font-semibold">Sector 4 Events</span>
+                            </label>
+                        </div>
+                    </div>
                 @elseif(auth()->user()->is_division_head)
-                    <!-- Division head filters -->
                     @php
                         $userDivision = auth()->user()->division;
                         $userSector = explode('_', $userDivision)[0];
                     @endphp
-                    <!-- Allow viewing their sector events -->
                     <label class="flex items-center text-white cursor-pointer">
                         <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="{{ $userSector }}">
-                        <span class="ml-2">{{ ucfirst(str_replace('_', ' - ', $userSector)) }} Events</span>
+                        <span class="ml-2">{{ ucfirst($userSector) }} (All Divisions)</span>
                     </label>
-                    <!-- And their specific division events -->
                     <label class="flex items-center text-white cursor-pointer ml-4">
                         <input type="checkbox" class="calendar-filter form-checkbox text-green-500 rounded" value="{{ $userDivision }}">
-                        <span class="ml-2">Division Events</span>
+                        <span class="ml-2">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</span>
                     </label>
                 @else
-                    <!-- Regular division employee filters -->
                     @php
                         $userDivision = auth()->user()->division;
                     @endphp
@@ -144,13 +158,16 @@
             // Set appropriate default filters based on user role
             let defaultFilters;
             if (isAdmin) {
-                defaultFilters = ['institute', 'sectoral', 'division_head', 'google'];
+                defaultFilters = [
+                    'institute',
+                    'sector1', 'sector2', 'sector3', 'sector4',
+                    'sector1_div1', 'sector2_div1', 'sector3_div1', 'sector4_div1',
+                    'google'
+                ];
             } else if (isDivisionHead) {
                 const userSector = userDivision.split('_')[0];
-                // Include institute, their sector, their division, and google calendar
                 defaultFilters = ['institute', userSector, userDivision, 'google'];
             } else {
-                // Regular division users only see institute and their division
                 defaultFilters = ['institute', userDivision, 'google'];
             }
 
@@ -162,15 +179,13 @@
             // Apply filters based on user role
             calendarFilters.forEach(checkbox => {
                 const value = checkbox.value;
-
+                // Only disable for non-admins
                 if (isAdmin) {
-                    checkbox.disabled = !['institute', 'sectoral', 'division_head', 'google'].includes(value);
+                    checkbox.disabled = false;
                 } else if (isDivisionHead) {
                     const userSector = userDivision.split('_')[0];
-                    // Division heads can only see institute, their sector, their division, and google
                     checkbox.disabled = !['institute', userSector, userDivision, 'google'].includes(value);
                 } else {
-                    // Regular division employee
                     checkbox.disabled = !['institute', userDivision, 'google'].includes(value);
                 }
 
@@ -185,7 +200,8 @@
 
                 // Enforce role-based filter restrictions
                 if (isAdmin) {
-                    checkedFilters = checkedFilters.filter(f => ['institute', 'sectoral', 'division_head', 'google'].includes(f));
+                    // Don't restrict what filters admins can use - they should see everything they select
+                    // Remove this line: checkedFilters = checkedFilters.filter(f => ['institute', 'sectoral', 'division_head', 'google'].includes(f));
                 } else if (isDivisionHead) {
                     const userSector = userDivision.split('_')[0];
                     checkedFilters = checkedFilters.filter(f => ['institute', userSector, userDivision, 'google'].includes(f));

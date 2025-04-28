@@ -17,60 +17,66 @@
                 <div class="mb-4">
                     <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
                     <div class="border p-2 rounded">
-                        <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full"
-                                {{ auth()->user()->division !== 'institute' ? 'disabled' : '' }}>
-                            @if(auth()->user()->division === 'institute')
-                                <option value="institute">Institute Level</option>
-                                <optgroup label="Sector 1">
-                                    <option value="sector1">Sector 1 (Main)</option>
-                                    <option value="sector1_div1">Sector 1 - Division 1</option>
+                        @if(auth()->user()->division === 'institute')
+                            <!-- Admin users can select any calendar type -->
+                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                                <option value="institute">Institute-wide Calendar (For All Divisions)</option>
+                                <optgroup label="Sector Calendars">
+                                    <option value="sector1">Sector 1 (All Sector 1 Divisions)</option>
+                                    <option value="sector2">Sector 2 (All Sector 2 Divisions)</option>
+                                    <option value="sector3">Sector 3 (All Sector 3 Divisions)</option>
+                                    <option value="sector4">Sector 4 (All Sector 4 Divisions)</option>
                                 </optgroup>
-                                <optgroup label="Sector 2">
-                                    <option value="sector2">Sector 2 (Main)</option>
-                                    <option value="sector2_div1">Sector 2 - Division 1</option>
+                                <optgroup label="Division-specific Calendars">
+                                    <option value="sector1_div1">Sector 1 - Division 1 Only</option>
+                                    <option value="sector2_div1">Sector 2 - Division 1 Only</option>
+                                    <option value="sector3_div1">Sector 3 - Division 1 Only</option>
+                                    <option value="sector4_div1">Sector 4 - Division 1 Only</option>
                                 </optgroup>
-                                <optgroup label="Sector 3">
-                                    <option value="sector3">Sector 3 (Main)</option>
-                                    <option value="sector3_div1">Sector 3 - Division 1</option>
-                                </optgroup>
-                                <optgroup label="Sector 4">
-                                    <option value="sector4">Sector 4 (Main)</option>
-                                    <option value="sector4_div1">Sector 4 - Division 1</option>
-                                </optgroup>
-                            @elseif(auth()->user()->is_division_head)
-                                <!-- For non-admin users, only show their division -->
+                            </select>
+                        @elseif(auth()->user()->is_division_head)
+                            <!-- Division heads can modify their sector and division calendars -->
+                            @php
+                                $userDivision = auth()->user()->division;
+                                $userSector = explode('_', $userDivision)[0];
+                            @endphp
+                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                                <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
+                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
+                            </select>
+                        @else
+                            <!-- Regular users can only work with their division calendar -->
+                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
                                 <option value="{{ auth()->user()->division }}">
-                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
+                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
                                 </option>
-                            @else
-                                <!-- For regular users, only show their division -->
-                                <option value="{{ auth()->user()->division }}">
-                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
-                                </option>
-                            @endif
-                        </select>
+                            </select>
+                            <p class="text-xs text-gray-500 italic mt-1">
+                                Regular users can only create/edit events in their assigned division calendar.
+                            </p>
+                        @endif
                     </div>
-                    @if(auth()->user()->is_division_head)
-                        <p class="text-xs text-gray-500 mt-1">As a division head, you can modify events for your sector or division.</p>
-                    @elseif(auth()->user()->division !== 'institute')
-                        <input type="hidden" name="calendar_type" value="{{ auth()->user()->division }}">
-                        <p class="text-xs text-gray-500 mt-1">You can only create events in your assigned division.</p>
-                    @endif
+                    <p class="text-xs text-gray-500 mt-1">
+                        <strong>Calendar Types:</strong><br>
+                        • Institute-wide: Visible to everyone<br>
+                        • Sector: Events for an entire sector with multiple divisions<br>
+                        • Division-specific: Events that only affect one division
+                    </p>
                 </div>
 
                 <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
                 <div class="flex space-x-3 mt-2">
                     @foreach([
-                    '#3b82f6' => 'bg-blue-500',
-                    '#ef4444' => 'bg-red-500',
-                    '#eab308' => 'bg-yellow-500',
-                    '#22c55e' => 'bg-green-500',
-                    '#000000' => 'bg-black'
+                        '#3b82f6' => 'bg-blue-500',
+                        '#ef4444' => 'bg-red-500',
+                        '#eab308' => 'bg-yellow-500',
+                        '#22c55e' => 'bg-green-500',
+                        '#000000' => 'bg-black'
                     ] as $hex => $bg)
-                    <label class="cursor-pointer edit-color-option rounded-full" data-color="{{ $hex }}">
-                        <input type="radio" name="color" value="{{ $hex }}" class="hidden">
-                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }}"></div>
-                    </label>
+                        <label class="cursor-pointer edit-color-option rounded-full" data-color="{{ $hex }}">
+                            <input type="radio" name="color" value="{{ $hex }}" class="hidden">
+                            <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }}"></div>
+                        </label>
                     @endforeach
                 </div>
 
@@ -98,7 +104,6 @@
                                 class="outline-none border-none w-full">
                         </div>
                     </div>
-
                     <div>
                         <label for="edit-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
                         <div class="border p-2 rounded">
@@ -151,9 +156,11 @@
 </div>
 
 <script>
+// Define editGuests variable in global scope
 let editGuests = [];
 
-// Make openEditModal globally available by attaching it to window object
+// IMPORTANT: Define openEditModal immediately in the global scope
+// This ensures it's available as soon as the script is loaded
 window.openEditModal = function(event) {
     console.log('openEditModal function called!', event);
 
@@ -181,6 +188,17 @@ window.openEditModal = function(event) {
         return;
     }
 
+    // Only block editing for Google events
+    if (event.isGoogleEvent) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Not Editable',
+            text: 'Google Calendar events cannot be edited from this app.',
+            confirmButtonColor: '#22c55e'
+        });
+        return;
+    }
+
     // Check for required properties
     if (!event.start || !event.id) {
         console.error('Invalid event data provided to openEditModal:', event);
@@ -188,6 +206,26 @@ window.openEditModal = function(event) {
             icon: 'error',
             title: 'Error',
             text: 'Invalid event data - missing required properties',
+            confirmButtonColor: '#22c55e'
+        });
+        return;
+    }
+
+    // Verify current user has permission to edit this event
+    const currentUserId = {{ auth()->id() }};
+    const eventCreatorId = parseInt(event.extendedProps.user_id) || null;
+
+    // Log for debugging
+    console.log('Edit check - Current user:', currentUserId, 'Creator:', eventCreatorId);
+    console.log('Full event data:', event);
+
+    // Allow edit if user is the creator or an admin
+    const isAdmin = "{{ auth()->user()->division }}" === "institute";
+    if (!isAdmin && eventCreatorId && currentUserId != eventCreatorId) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Permission Denied',
+            text: 'Only the creator of this event can edit it',
             confirmButtonColor: '#22c55e'
         });
         return;
@@ -248,7 +286,10 @@ window.openEditModal = function(event) {
                          event.calendar_type ||
                          'division';
 
-    document.getElementById('edit-calendar_type').value = calendarType;
+    // Handle both admin and non-admin cases for calendar type
+    if (document.getElementById('edit-calendar_type')) {
+        document.getElementById('edit-calendar_type').value = calendarType;
+    }
 
     // Fix date handling with extra validation
     try {
@@ -305,7 +346,6 @@ window.openEditModal = function(event) {
     if (window.currentEditingGoogleEvent) {
         const calendarEl = document.getElementById('calendar');
         const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
-
         if (!isAuthenticated) {
             window.closeEditModal();
             Swal.fire({
@@ -400,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Color option handling
     document.querySelectorAll(".edit-color-option input").forEach(option => {
-        option.addEventListener("change", function() {}
+        option.addEventListener("change", function() {
             document.querySelectorAll(".edit-color-option").forEach(el => {
                 el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
             });
@@ -464,7 +504,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (editGuests.length > 0) {
                 const startDate = document.getElementById('edit-start-date').value;
                 const endDate = document.getElementById('edit-end-date').value || startDate;
-
                 const checkData = new URLSearchParams();
                 checkData.append('guests', JSON.stringify(editGuests));
                 checkData.append('start_date', startDate);
@@ -485,10 +524,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
                     let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
-
                     conflictResult.conflicts.forEach(conflict => {
                         conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
-
                         conflict.events.forEach(event => {
                             const startDate = new Date(event.start).toLocaleString();
                             const endDate = new Date(event.end).toLocaleString();
@@ -518,7 +555,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if this is a Google event
             let response;
             console.log('Updating event, is Google event:', window.currentEditingGoogleEvent, 'Event ID:', eventId);
-
             if (window.currentEditingGoogleEvent) {
                 // Extract the actual Google event ID
                 const googleEventId = eventId.replace('google_', '');
@@ -539,34 +575,89 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 // Regular event update
-                response = await fetch(`${window.baseUrl}/events/${eventId}`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                console.log('Sending update for regular event ID:', eventId);
+                console.log('Form data being sent:');
+                for (let pair of formData.entries()) {
+                    console.log(pair[0] + ': ' + pair[1]);
+                }
+
+                try {
+                    // Send the request
+                    const fetchResponse = await fetch(`${window.baseUrl}/events/${eventId}`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    // Get the response text first
+                    const responseText = await fetchResponse.text();
+                    console.log('Server response text:', responseText);
+
+                    // Create a response-like object with the parsed data
+                    response = {
+                        ok: fetchResponse.ok,
+                        status: fetchResponse.status,
+                        success: false,
+                        message: ''
+                    };
+
+                    if (responseText) {
+                        try {
+                            const responseData = JSON.parse(responseText);
+                            response.success = responseData.success;
+                            response.message = responseData.message;
+                            response.data = responseData;
+                            console.log('Parsed response data:', responseData);
+                        } catch (jsonError) {
+                            console.error('Error parsing JSON response:', jsonError);
+                            // If we can't parse JSON but the request was successful, consider it a success
+                            if (fetchResponse.ok) {
+                                response.success = true;
+                                response.message = 'Event updated successfully';
+                            }
+                        }
                     }
-                });
+                } catch (fetchError) {
+                    console.error('Fetch error:', fetchError);
+                    throw fetchError;
+                }
             }
 
             if (response.ok || (response.success !== undefined && response.success)) {
+                // Force immediate refresh before closing modal and showing alert
+                if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                    console.log('Calling calendar.refetchEvents()');
+                    try {
+                        window.calendar.refetchEvents();
+                    } catch (refreshError) {
+                        console.error('Error refreshing calendar:', refreshError);
+                    }
+                }
+
+                // Close modal
                 window.closeEditModal();
+
                 Swal.fire({
                     icon: 'success',
                     title: 'Success',
-                    text: 'Event updated successfully!',
+                    text: response.message || 'Event updated successfully!',
                     confirmButtonColor: '#22c55e'
                 }).then(() => {
-                    location.reload();
+                    console.log('Refreshing calendar after confirmation');
+                    // Force reload after confirmation - fail-safe
+                    if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                        window.calendar.refetchEvents();
+                    } else {
+                        console.log('Reloading page as fallback');
+                        location.reload();
+                    }
                 });
             } else {
-                let errorMessage = 'Failed to update event';
-                if (response.json) {
-                    const errorData = await response.json();
-                    errorMessage = errorData.message || errorData.error || errorMessage;
-                } else if (response.error) {
-                    errorMessage = response.error;
-                }
-
+                // Handle error using the response object we created, not trying to read the body again
+                const errorMessage = response.message || response.data?.error || 'Failed to update event';
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
@@ -584,20 +675,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+
+    // Replace the click outside handler
+    document.addEventListener('mousedown', function(event) {
+        if (document.querySelector('.swal2-container')) {
+            return;
+        }
+        const modal = document.getElementById('edit-event-modal');
+        const modalContent = modal.querySelector('.h-full.bg-white');
+
+        if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
+            window.closeEditModal();
+        }
+    }, true);
 });
-
-// Replace the click outside handler
-document.addEventListener('mousedown', function(event) {}
-    if (document.querySelector('.swal2-container')) {
-        return;
-    }
-
-    const modal = document.getElementById('edit-event-modal');
-    const modalContent = modal.querySelector('.h-full.bg-white');
-
-    if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
-        window.closeEditModal();
-    }
-}, true);
 </script>
 

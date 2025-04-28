@@ -44,10 +44,12 @@ class CalendarController extends Controller
         $eventsQuery = Event::with('participants');
 
         if ($isAdmin) {
-            // Admin sees all events
-            $eventsQuery->where('calendar_type', 'institute');
+            // Admin sees institute and all sector-level events (including all divisions within a sector)
+            $eventsQuery->where(function ($query) {
+                $query->where('calendar_type', 'institute')
+                      ->orWhereIn('calendar_type', ['sector1', 'sector2', 'sector3', 'sector4']);
+            });
         } else if ($isDivisionHead) {
-            // Division heads see institute events, their sector events, and their division events
             $userSector = explode('_', $user->division)[0];
             $eventsQuery->where(function($query) use ($user, $userSector) {
                 $query->where('calendar_type', 'institute')
@@ -55,7 +57,6 @@ class CalendarController extends Controller
                       ->orWhere('calendar_type', $user->division);
             });
         } else {
-            // Regular users only see institute events and their division events
             $eventsQuery->where(function($query) use ($user) {
                 $query->where('calendar_type', 'institute')
                       ->orWhere('calendar_type', $user->division);
@@ -73,7 +74,7 @@ class CalendarController extends Controller
             'is_all_day as allDay',
             'calendar_type',
             'private',
-            'user_id'
+            'user_id'  // Make sure user_id is selected
         )
         ->get()
         ->map(function ($event) {
@@ -92,6 +93,11 @@ class CalendarController extends Controller
 
             // Get the mapped calendar type or keep original if no mapping exists
             $mappedCalendarType = $calendarTypeMap[$event->calendar_type] ?? $event->calendar_type;
+
+            // Ensure user_id is consistently passed as a number
+            if (isset($data['user_id'])) {
+                $data['user_id'] = (int)$data['user_id'];
+            }
 
             // Hide details if event is private and user is not the owner
             if ($event->private && $event->user_id !== auth()->id()) {
@@ -112,7 +118,7 @@ class CalendarController extends Controller
                     'guests' => $event->participants->pluck('email'),
                     'calendarType' => $mappedCalendarType,
                     'private' => $event->private,
-                    'user_id' => $event->user_id
+                    'user_id' => (int)$event->user_id  // Cast to integer to ensure type consistency
                 ];
             }
 
@@ -243,8 +249,8 @@ class CalendarController extends Controller
     {
         $event = Event::findOrFail($id);
 
-        // Check if user can edit this event based on division
-        if (!auth()->user()->canCreateEventsIn($event->calendar_type)) {
+        // Admin can edit any event
+        if (auth()->user()->division !== 'institute' && !auth()->user()->canCreateEventsIn($event->calendar_type)) {
             return redirect()->route('home')->with('error', 'You do not have permission to edit this event.');
         }
 
@@ -256,7 +262,15 @@ class CalendarController extends Controller
         try {
             $event = Event::findOrFail($id);
 
-            // Check if user can edit this event based on division
+            // Admin can update any event
+            if (auth()->user()->division !== 'institute' && auth()->id() !== $event->user_id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'You do not have permission to edit this event.'
+                ], 403);
+            }
+
+            // Existing division permission check
             if (!auth()->user()->canCreateEventsIn($event->calendar_type) &&
                 !auth()->user()->canCreateEventsIn($request->calendar_type)) {
                 return response()->json([
@@ -330,7 +344,20 @@ class CalendarController extends Controller
     public function destroy($id)
     {
         $event = Event::findOrFail($id);
+
+        // Ensure only the event creator can delete it
+        if (auth()->id() !== $event->user_id) {
+            if (request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'You do not have permission to delete this event.'], 403);
+            }
+            return redirect()->route('home')->with('error', 'You do not have permission to delete this event.');
+        }
+
         $event->delete();
+
+        if (request()->wantsJson()) {
+            return response()->json(['success' => true, 'message' => 'Event deleted successfully']);
+        }
         return redirect()->route('home')->with('success', 'Event deleted successfully!');
     }
 

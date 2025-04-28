@@ -94,27 +94,30 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Apply filter settings
                         const savedFilters = localStorage.getItem('calendarFilters')
                             ? JSON.parse(localStorage.getItem('calendarFilters'))
-                            : ['institute', 'google']; // Default to minimal filters for safety
+                            : isAdmin
+                                ? [
+                                    'institute',
+                                    'sector1', 'sector2', 'sector3', 'sector4',
+                                    'sector1_div1', 'sector2_div1', 'sector3_div1', 'sector4_div1',
+                                    'google'
+                                ]
+                                : ['institute', 'google'];
 
                         // Check both the source property AND if the ID starts with 'google_'
                         const isGoogleEvent = info.event.extendedProps.source === 'google' ||
-                                            info.event.id.startsWith('google_');
+                            info.event.id.startsWith('google_');
 
-                        // Get calendar type from extendedProps
-                        const calendarType = isGoogleEvent ? 'google' :
-                                           (info.event.extendedProps.calendarType || 'institute');
+                        // Get calendar type from extendedProps or fallback
+                        const calendarType =
+                            isGoogleEvent ? 'google'
+                            : info.event.extendedProps.calendarType
+                                || info.event.extendedProps.calendar_type
+                                || info.event.extendedProps.calendar_type
+                                || info.event.calendar_type
+                                || 'institute';
 
-                        console.log(`Event "${info.event.title}" has calendarType: ${calendarType}`);
-
-                        // Admin rule: if user is admin, only show institute and google events
-                        let shouldShow;
-                        if (isAdmin) {
-                            shouldShow = calendarType === 'institute' || calendarType === 'google';
-                        } else {
-                            // For non-admin users, use the saved filters
-                            shouldShow = calendarType && savedFilters.includes(calendarType);
-                        }
-
+                        // Show events based on selected filters
+                        const shouldShow = calendarType && savedFilters.includes(calendarType);
                         info.event.setProp('display', shouldShow ? 'auto' : 'none');
                     } catch (err) {
                         console.error('Error in eventDidMount:', err);
@@ -512,6 +515,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     console.warn('Calendar not initialized, cannot clear Google events');
                 }
             };
+
+            // Add global helper function for refreshing calendar events
+            window.refreshCalendarEvents = function() {
+                console.log('Global calendar refresh called');
+                if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                    window.calendar.refetchEvents();
+                    return true;
+                } else {
+                    console.warn('Calendar not available for refresh');
+                    return false;
+                }
+            };
+
+            // Store reference to calendar in DOM element for backup access
+            calendarEl._calendar = window.calendar;
         } catch (error) {
             console.error('Error initializing calendar:', error);
         }

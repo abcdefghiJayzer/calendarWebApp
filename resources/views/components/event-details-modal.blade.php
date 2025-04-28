@@ -14,13 +14,8 @@
                 <!-- Content will be dynamically populated -->
             </div>
 
-            <div class="flex justify-end space-x-2 mt-4">
-                <button onclick="editEvent()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
-                    Edit
-                </button>
-                <button onclick="deleteEvent()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                    Delete
-                </button>
+            <div class="flex justify-end space-x-2 mt-4" id="event-action-buttons">
+                <!-- Buttons will be shown/hidden dynamically -->
             </div>
         </div>
     </div>
@@ -47,6 +42,7 @@
 
         const title = document.getElementById('event-title');
         const content = document.getElementById('event-content');
+        const actionButtons = document.getElementById('event-action-buttons');
 
         title.textContent = event.title;
 
@@ -67,6 +63,38 @@
                 </ul>
             </div>` : ''}
         `;
+
+        // Debug user ID comparison
+        const currentUserId = {{ auth()->id() }};
+        console.log('Event data:', event);
+        console.log('Event extended props:', event.extendedProps);
+
+        // Get user_id from wherever it might be (direct property or in extendedProps)
+        let eventCreatorId = null;
+        if (event.extendedProps && event.extendedProps.user_id) {
+            eventCreatorId = parseInt(event.extendedProps.user_id);
+        } else if (event.user_id) {
+            eventCreatorId = parseInt(event.user_id);
+        }
+
+        console.log('Current user ID:', currentUserId, 'Event creator ID:', eventCreatorId);
+
+        // Show edit/delete buttons if user is the creator or an admin
+        const isAdmin = "{{ auth()->user()->division }}" === "institute";
+        if (isAdmin || (eventCreatorId && currentUserId == eventCreatorId)) {
+            actionButtons.innerHTML = `
+                <button onclick="editEvent()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                    Edit
+                </button>
+                <button onclick="deleteEvent()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                    Delete
+                </button>
+            `;
+        } else {
+            actionButtons.innerHTML = `
+                <p class="text-sm text-gray-500 italic">Only the creator of this event can edit or delete it</p>
+            `;
+        }
     }
 
     function closeEventModal() {
@@ -88,121 +116,56 @@
     function editEvent() {
         if (!currentEventId) return;
 
-        // Improved Google event detection - check for google_ prefix
-        // OR check for typical Google Calendar ID format (long alphanumeric string)
+        // Detect Google event by ID or source
         const hasGooglePrefix = currentEventId.startsWith('google_');
         const isGoogleFormatId = /^[a-z0-9]{26,}$/.test(currentEventId);
         const isGoogleEvent = hasGooglePrefix || isGoogleFormatId;
 
-        console.log('Editing event', {
-            id: currentEventId,
-            hasGooglePrefix,
-            isGoogleFormatId,
-            isGoogleEvent
-        });
-
         if (isGoogleEvent) {
-            // For Google events, don't fetch from server, use the data already available from the calendar
-            console.log('Editing Google Calendar event:', currentEventId);
-
-            // Get all events from the calendar
-            const allEvents = window.calendar.getEvents();
-            console.log('Found events in calendar:', allEvents.length);
-
-            // Find the matching Google event - handle both prefixed and non-prefixed IDs
-            const googleEvent = allEvents.find(e => {
-                return e.id === currentEventId ||
-                      e.id === 'google_' + currentEventId ||
-                      currentEventId === 'google_' + e.id;
+            // For Google events, show a warning and do not open the edit modal
+            Swal.fire({
+                icon: 'warning',
+                title: 'Not Editable',
+                text: 'Google Calendar events cannot be edited from this app.',
+                confirmButtonColor: '#22c55e'
             });
+            return;
+        }
 
-            if (googleEvent) {
-                console.log('Found Google event data:', googleEvent);
-                console.log('Event extended props:', googleEvent.extendedProps);
-
-                const eventData = {
-                    id: googleEvent.id,
-                    title: googleEvent.title,
-                    start: googleEvent.start,
-                    end: googleEvent.end,
-                    allDay: googleEvent.allDay,
-                    backgroundColor: googleEvent.backgroundColor,
-                    isGoogleEvent: true,
-                    extendedProps: {
-                        description: googleEvent.extendedProps.description || '',
-                        location: googleEvent.extendedProps.location || '',
-                        guests: googleEvent.extendedProps.guests || [],
-                        calendar_type: googleEvent.extendedProps.calendarType || 'institute',
-                        private: googleEvent.extendedProps.private || false,
-                        user_id: googleEvent.extendedProps.user_id || null
-                    }
-                };
-
-                // Close the details modal first
+        // For local events, fetch and open the edit modal as usual
+        fetch(`${window.baseUrl}/events/${currentEventId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                data.isGoogleEvent = false;
+                if (!data.extendedProps && data.calendar_type) {
+                    data.extendedProps = {
+                        description: data.description || '',
+                        location: data.location || '',
+                        guests: data.guests || [],
+                        calendar_type: data.calendar_type || 'division',
+                        private: data.private || false,
+                        user_id: data.user_id || null
+                    };
+                }
                 closeEventModal();
-
-                // Then open edit modal with this data
                 setTimeout(() => {
-                    window.openEditModal(eventData);
+                    window.openEditModal(data);
                 }, 100);
-            } else {
-                console.error('Google Calendar event not found in calendar events');
-                // Additional debug info to find the event
-                console.log('Looking for event ID:', currentEventId);
-                console.log('All event IDs in calendar:', allEvents.map(e => e.id));
-
+            })
+            .catch(error => {
+                console.error('Error fetching event data:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Could not find Google Calendar event data',
+                    text: 'Failed to load event data',
                     confirmButtonColor: '#22c55e'
                 });
-            }
-        } else {
-            // Regular event - fetch from server
-            fetch(`${window.baseUrl}/events/${currentEventId}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Add the isGoogleEvent flag
-                    data.isGoogleEvent = false;
-
-                    // Format the data to match expected structure
-                    if (!data.extendedProps && data.calendar_type) {
-                        data.extendedProps = {
-                            description: data.description || '',
-                            location: data.location || '',
-                            guests: data.guests || [],
-                            calendar_type: data.calendar_type || 'division',
-                            private: data.private || false,
-                            user_id: data.user_id || null
-                        };
-                    }
-
-                    console.log('Event data from server:', data);
-
-                    // Close the details modal first
-                    closeEventModal();
-
-                    // Then open edit modal with this data
-                    setTimeout(() => {
-                        window.openEditModal(data);
-                    }, 100);
-                })
-                .catch(error => {
-                    console.error('Error fetching event data:', error);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Failed to load event data',
-                        confirmButtonColor: '#22c55e'
-                    });
-                });
-        }
+            });
     }
 
     async function deleteEvent() {

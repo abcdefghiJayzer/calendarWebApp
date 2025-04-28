@@ -35,19 +35,19 @@
             Back to Calendar
         </a>
 
-        @if(!$event->private || auth()->id() === $event->user_id)
+        @if(auth()->id() === $event->user_id)
             <button onclick="editEvent({{ $event->id }})" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
                 Edit Event
             </button>
-        @endif
 
-        <form action="{{ route('destroy', $event->id) }}" method="POST">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-                Delete Event
-            </button>
-        </form>
+            <form action="{{ route('destroy', $event->id) }}" method="POST">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+                    Delete Event
+                </button>
+            </form>
+        @endif
     </div>
 </div>
 

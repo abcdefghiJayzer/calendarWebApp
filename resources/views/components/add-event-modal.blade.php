@@ -34,44 +34,40 @@
                     <div class="border p-2 rounded">
                         <select name="calendar_type" id="calendar_type" required class="outline-none border-none w-full">
                             @if(auth()->user()->division === 'institute')
-                                <option value="institute">Institute Level</option>
-                                <optgroup label="Sector 1">
-                                    <option value="sector1">Sector 1 (Main)</option>
-                                    <option value="sector1_div1">Sector 1 - Division 1</option>
+                                <option value="institute">Institute-wide Calendar (For All Divisions)</option>
+                                <optgroup label="Sector Calendars">
+                                    <option value="sector1">Sector 1 (All Sector 1 Divisions)</option>
+                                    <option value="sector2">Sector 2 (All Sector 2 Divisions)</option>
+                                    <option value="sector3">Sector 3 (All Sector 3 Divisions)</option>
+                                    <option value="sector4">Sector 4 (All Sector 4 Divisions)</option>
                                 </optgroup>
-                                <optgroup label="Sector 2">
-                                    <option value="sector2">Sector 2 (Main)</option>
-                                    <option value="sector2_div1">Sector 2 - Division 1</option>
-                                </optgroup>
-                                <optgroup label="Sector 3">
-                                    <option value="sector3">Sector 3 (Main)</option>
-                                    <option value="sector3_div1">Sector 3 - Division 1</option>
-                                </optgroup>
-                                <optgroup label="Sector 4">
-                                    <option value="sector4">Sector 4 (Main)</option>
-                                    <option value="sector4_div1">Sector 4 - Division 1</option>
+                                <optgroup label="Division-specific Calendars">
+                                    <option value="sector1_div1">Sector 1 - Division 1 Only</option>
+                                    <option value="sector2_div1">Sector 2 - Division 1 Only</option>
+                                    <option value="sector3_div1">Sector 3 - Division 1 Only</option>
+                                    <option value="sector4_div1">Sector 4 - Division 1 Only</option>
                                 </optgroup>
                             @elseif(auth()->user()->is_division_head)
                                 @php
-                                    // For division heads, extract their sector from their division
                                     $userDivision = auth()->user()->division;
-                                    $userSector = explode('_', $userDivision)[0]; // e.g., sector1_div1 -> sector1
+                                    $userSector = explode('_', $userDivision)[0];
                                 @endphp
-                                <option value="{{ $userSector }}">{{ ucfirst(str_replace('_', ' - ', $userSector)) }} (Main)</option>
-                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }}</option>
+                                <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
+                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
                             @else
                                 <!-- For regular users, only show their division -->
                                 <option value="{{ auth()->user()->division }}">
-                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }}
+                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
                                 </option>
                             @endif
                         </select>
                     </div>
-                    @if(auth()->user()->is_division_head)
-                        <p class="text-xs text-gray-500 mt-1">As a division head, you can create events for your sector or division.</p>
-                    @elseif(auth()->user()->division !== 'institute')
-                        <p class="text-xs text-gray-500 mt-1">You can only create events in your assigned division.</p>
-                    @endif
+                    <p class="text-xs text-gray-500 mt-1">
+                        <strong>Calendar Types:</strong><br>
+                        • Institute-wide: Visible to everyone<br>
+                        • Sector: Events for an entire sector with multiple divisions<br>
+                        • Division-specific: Events that only affect one division
+                    </p>
                 </div>
 
                 <div>
