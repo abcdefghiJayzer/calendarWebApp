@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Event;
+use App\Observers\EventObserver;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Event as EventFacade;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -25,7 +27,9 @@ class EventServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Register the Event observer for the Event model
+        // We use the App\Models\Event directly, not the Event facade
+        \App\Models\Event::observe(EventObserver::class);
     }
 
     /**
