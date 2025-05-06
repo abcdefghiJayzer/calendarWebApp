@@ -173,45 +173,72 @@ class GoogleCalendarService
         }
     }
 
+    /**
+     * Get the Google Client instance
+     *
+     * @return Google_Client
+     */
+    public function getClient()
+    {
+        return $this->client;
+    }
+
+    public function useUserTokens(\App\Models\User $user)
+    {
+        if (empty($user->google_access_token)) {
+            Log::warning('No Google access token available for user', ['user_id' => $user->id]);
+            return false;
+        }
+
+        try {
+            $client = $this->getClient();
+
+            // Set access token from database
+            $accessToken = json_decode($user->google_access_token, true);
+            $client->setAccessToken($accessToken);
+
+            // Check if token needs refresh
+            if ($client->isAccessTokenExpired()) {
+                Log::info('Google access token expired, refreshing', ['user_id' => $user->id]);
+
+                if ($client->getRefreshToken()) {
+                    $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+
+                    // Save the new access token to the database
+                    $user->google_access_token = json_encode($client->getAccessToken());
+                    $user->save();
+
+                    Log::info('Google access token refreshed successfully', ['user_id' => $user->id]);
+                } else {
+                    Log::error('No refresh token available', ['user_id' => $user->id]);
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error using user tokens: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
     public function isAuthenticated()
     {
         try {
-            $hasToken = Session::has('google_token');
+            $user = Auth::user();
 
-            if (!$hasToken) {
-                Log::info('No Google token in session, not authenticated');
+            // Check if the user has tokens stored in the database
+            if (!$user || empty($user->google_access_token)) {
                 return false;
             }
 
-            // Check if token is valid
-            $tokenData = Session::get('google_token');
-            Log::info('Checking authentication with token', [
-                'token_type' => $tokenData['token_type'] ?? 'unknown',
-                'expires_in' => $tokenData['expires_in'] ?? 'unknown',
-                'created' => $tokenData['created'] ?? 'unknown',
-                'has_access_token' => !empty($tokenData['access_token']),
-            ]);
-
-            $this->client->setAccessToken($tokenData);
-            $notExpired = !$this->client->isAccessTokenExpired();
-
-            if (!$notExpired && isset($tokenData['refresh_token'])) {
-                Log::info('Token expired but has refresh token, attempting refresh');
-                $this->client->fetchAccessTokenWithRefreshToken($tokenData['refresh_token']);
-                $newToken = $this->client->getAccessToken();
-                Session::put('google_token', $newToken);
-                $notExpired = true;
-                Log::info('Token refreshed successfully');
-            }
-
-            Log::info('Google Calendar authentication status', [
-                'has_token' => $hasToken,
-                'not_expired' => $notExpired
-            ]);
-
-            return $hasToken && $notExpired;
-        } catch (Exception $e) {
-            Log::error('Error checking authentication status', ['error' => $e->getMessage()]);
+            // Attempt to use the stored tokens
+            return $this->useUserTokens($user);
+        } catch (\Exception $e) {
+            Log::error('Error checking Google authentication: ' . $e->getMessage());
             return false;
         }
     }
@@ -273,20 +300,23 @@ class GoogleCalendarService
             throw new Exception('No Google Calendar ID available');
         }
 
-        $event = new \Google_Service_Calendar_Event([
-            'summary' => $data['title'],
-            'description' => $data['description'] ?? '',
-            'start' => [
-                'dateTime' => date('c', strtotime($data['start_date'])),
-                'timeZone' => config('app.timezone'),
-            ],
-            'end' => [
-                'dateTime' => date('c', strtotime($data['end_date'])),
-                'timeZone' => config('app.timezone'),
-            ],
-            'location' => $data['location'] ?? '',
-            'colorId' => $this->mapColorToGoogleColorId($data['color'] ?? '#3b82f6'),
-        ]);
+        $event = new \Google_Service_Calendar_Event();
+        $event->setSummary($data['title']);
+        $event->setDescription($data['description'] ?? '');
+
+        // Create proper EventDateTime objects for start and end dates
+        $startDateTime = new \Google_Service_Calendar_EventDateTime();
+        $startDateTime->setDateTime(date('c', strtotime($data['start_date'])));
+        $startDateTime->setTimeZone(config('app.timezone'));
+        $event->setStart($startDateTime);
+
+        $endDateTime = new \Google_Service_Calendar_EventDateTime();
+        $endDateTime->setDateTime(date('c', strtotime($data['end_date'])));
+        $endDateTime->setTimeZone(config('app.timezone'));
+        $event->setEnd($endDateTime);
+
+        $event->setLocation($data['location'] ?? '');
+        $event->setColorId($this->mapColorToGoogleColorId($data['color'] ?? '#3b82f6'));
 
         if (!empty($data['guests'])) {
             $attendees = [];
@@ -317,15 +347,16 @@ class GoogleCalendarService
                 $event->setDescription($data['description']);
             }
 
-            $event->setStart([
-                'dateTime' => date('c', strtotime($data['start_date'])),
-                'timeZone' => config('app.timezone'),
-            ]);
+            // Create proper EventDateTime objects for start and end dates
+            $startDateTime = new \Google_Service_Calendar_EventDateTime();
+            $startDateTime->setDateTime(date('c', strtotime($data['start_date'])));
+            $startDateTime->setTimeZone(config('app.timezone'));
+            $event->setStart($startDateTime);
 
-            $event->setEnd([
-                'dateTime' => date('c', strtotime($data['end_date'])),
-                'timeZone' => config('app.timezone'),
-            ]);
+            $endDateTime = new \Google_Service_Calendar_EventDateTime();
+            $endDateTime->setDateTime(date('c', strtotime($data['end_date'])));
+            $endDateTime->setTimeZone(config('app.timezone'));
+            $event->setEnd($endDateTime);
 
             if (isset($data['location'])) {
                 $event->setLocation($data['location']);
@@ -462,5 +493,191 @@ class GoogleCalendarService
             ]);
             return null;
         }
+    }
+
+    /**
+     * Sync multiple local events to Google Calendar
+     *
+     * @return array Results of sync operation with success, skipped and failed events
+     */
+    public function syncMultipleEvents()
+    {
+        if (!$this->isAuthenticated()) {
+            throw new Exception('Not authenticated with Google Calendar');
+        }
+
+        if (!$this->calendarId) {
+            throw new Exception('No Google Calendar ID available');
+        }
+
+        $results = [
+            'success' => [],
+            'skipped' => [],
+            'failed' => []
+        ];
+
+        try {
+            // Get events created by the current user
+            // Use chunking to handle large datasets without memory issues
+            $user_id = auth()->id();
+            $eventCount = 0;
+
+            \App\Models\Event::where('user_id', $user_id)
+                ->with('participants')
+                ->chunk(50, function($events) use (&$results, &$eventCount) {
+                    foreach ($events as $event) {
+                        $eventCount++;
+
+                        try {
+                            // Check if this event already has a Google ID but verify the event still exists in Google
+                            if ($event->google_event_id) {
+                                try {
+                                    // Try to retrieve the event from Google to see if it exists
+                                    $googleEvent = $this->getEvent($event->google_event_id);
+
+                                    if ($googleEvent) {
+                                        // Event exists in Google, skip it
+                                        $results['skipped'][] = [
+                                            'id' => $event->id,
+                                            'title' => $event->title,
+                                            'reason' => 'Already synced with Google Calendar'
+                                        ];
+                                        continue;
+                                    } else {
+                                        // Google event doesn't exist anymore, we need to create it again
+                                        \Log::info('Event exists in DB with Google ID, but not in Google Calendar; will recreate', [
+                                            'event_id' => $event->id,
+                                            'google_event_id' => $event->google_event_id
+                                        ]);
+                                        // Continue with creation (don't skip)
+                                    }
+                                } catch (\Exception $e) {
+                                    // Error checking Google event - assume it's gone and we need to recreate
+                                    \Log::warning('Error checking if Google event exists, will attempt to recreate', [
+                                        'event_id' => $event->id,
+                                        'google_event_id' => $event->google_event_id,
+                                        'error' => $e->getMessage()
+                                    ]);
+                                    // Continue with creation (don't skip)
+                                }
+                            }
+
+                            // Prepare event data for Google Calendar with proper formatting
+                            $eventData = [
+                                'title' => $event->title,
+                                'description' => $event->description,
+                                'start_date' => $event->start_date,
+                                'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
+                                'location' => $event->location,
+                                'color' => $event->color,
+                                'guests' => $event->participants->pluck('email')->toArray(),
+                                'is_all_day' => $event->is_all_day
+                            ];
+
+                            // Add some debugging to track any invalid dates
+                            $startTimestamp = strtotime($eventData['start_date']);
+                            $endTimestamp = strtotime($eventData['end_date']);
+
+                            if (!$startTimestamp || !$endTimestamp) {
+                                throw new \Exception("Invalid date format: Start: {$eventData['start_date']}, End: {$eventData['end_date']}");
+                            }
+
+                            // Create the event in Google Calendar
+                            $googleEvent = $this->createEvent($eventData);
+
+                            // Update the local event with the Google event ID
+                            $event->google_event_id = $googleEvent->id;
+                            $event->save();
+
+                            $results['success'][] = [
+                                'id' => $event->id,
+                                'title' => $event->title,
+                                'google_event_id' => $googleEvent->id
+                            ];
+
+                            \Log::info('Event synced to Google Calendar', [
+                                'event_id' => $event->id,
+                                'title' => $event->title,
+                                'google_event_id' => $googleEvent->id
+                            ]);
+                        } catch (\Exception $e) {
+                            \Log::error('Failed to sync event to Google Calendar', [
+                                'event_id' => $event->id,
+                                'title' => $event->title,
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString()
+                            ]);
+
+                            $results['failed'][] = [
+                                'id' => $event->id,
+                                'title' => $event->title,
+                                'error' => $e->getMessage()
+                            ];
+                        }
+                    }
+                });
+
+            \Log::info('Bulk sync completed', [
+                'total_events' => $eventCount,
+                'success_count' => count($results['success']),
+                'skipped_count' => count($results['skipped']),
+                'failed_count' => count($results['failed'])
+            ]);
+
+            return $results;
+
+        } catch (\Exception $e) {
+            \Log::error('Error in bulk sync operation', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Ensure we have valid tokens by refreshing from database if needed
+     */
+    public function refreshTokenIfNeeded()
+    {
+        // Only proceed if we have a logged-in user
+        if (!auth()->check()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        // Check if the user has Google tokens stored in the database
+        if ($user->google_access_token && $user->google_refresh_token) {
+            try {
+                // Load tokens from database to the client
+                $client = $this->getClient();
+                $client->setAccessToken(json_decode($user->google_access_token, true));
+
+                // If token is expired, refresh it
+                if ($client->isAccessTokenExpired()) {
+                    \Log::info('Refreshing expired Google token for user', ['user_id' => $user->id]);
+
+                    if ($client->getRefreshToken()) {
+                        $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+
+                        // Save the new access token to the database
+                        $user->google_access_token = json_encode($client->getAccessToken());
+                        $user->save();
+
+                        \Log::info('Google token refreshed and saved to database');
+                    } else {
+                        \Log::warning('No refresh token available for user', ['user_id' => $user->id]);
+                    }
+                }
+
+                return true;
+            } catch (\Exception $e) {
+                \Log::error('Error refreshing Google token: ' . $e->getMessage());
+                return false;
+            }
+        }
+
+        return false;
     }
 }

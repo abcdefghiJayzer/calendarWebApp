@@ -24,6 +24,8 @@ class User extends Authenticatable
         'password',
         'division',
         'is_division_head',
+        'google_access_token',
+        'google_refresh_token',
     ];
 
     /**

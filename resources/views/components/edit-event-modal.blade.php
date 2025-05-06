@@ -149,6 +149,18 @@
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
                         Update Event
                     </button>
+
+                    <!-- Add Sync to Google button -->
+                    <button type="button" id="sync-to-google-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
+                        </svg>
+                        Sync to Google Calendar
+                    </button>
+
+                    <button type="button" id="cancel-edit-btn" class="ml-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">
+                        Cancel
+                    </button>
                 </div>
             </form>
         </div>
@@ -219,9 +231,9 @@ window.openEditModal = function(event) {
     console.log('Edit check - Current user:', currentUserId, 'Creator:', eventCreatorId);
     console.log('Full event data:', event);
 
-    // Allow edit if user is the creator or an admin
+    // Allow edit only if user is the creator (even for admins)
     const isAdmin = "{{ auth()->user()->division }}" === "institute";
-    if (!isAdmin && eventCreatorId && currentUserId != eventCreatorId) {
+    if (eventCreatorId && currentUserId != eventCreatorId) {
         Swal.fire({
             icon: 'error',
             title: 'Permission Denied',
@@ -231,6 +243,7 @@ window.openEditModal = function(event) {
         return;
     }
 
+    // Additional permission check for division access (keep this for division-level permissions)
     console.log('Opening edit modal with event:', event);
 
     const modal = document.getElementById('edit-event-modal');
@@ -240,7 +253,7 @@ window.openEditModal = function(event) {
     // Add backdrop
     const backdrop = document.createElement('div');
     backdrop.id = 'edit-backdrop';
-    backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+    backdrop.className = 'fixed inset-0 bg-black/3 z-[998] transition-opacity duration-300';
     backdrop.onclick = window.closeEditModal;
     document.body.appendChild(backdrop);
 
@@ -341,6 +354,112 @@ window.openEditModal = function(event) {
     });
 
     editGuests.forEach(email => createEditGuestTag(email));
+
+    // Show/hide Sync to Google button based on event status and Google authentication
+    const syncButton = document.getElementById('sync-to-google-btn');
+    const calendarEl = document.getElementById('calendar');
+    const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+    // Only show the sync button if:
+    // 1. It's a local event (not from Google)
+    // 2. User is authenticated with Google
+    // 3. Event doesn't have a Google event ID already
+    const isLocalEvent = !event.isGoogleEvent && !window.currentEditingGoogleEvent;
+    const hasGoogleId = event.google_event_id || eventData.extendedProps.google_event_id;
+
+    if (isLocalEvent && isAuthenticated && !hasGoogleId) {
+        syncButton.classList.remove('hidden');
+
+        // Add click handler for sync button
+        syncButton.onclick = async function(e) {
+            e.preventDefault();
+
+            // Show loading state
+            const originalText = syncButton.innerHTML;
+            syncButton.disabled = true;
+            syncButton.innerHTML = `
+                <svg class="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Syncing...
+            `;
+
+            try {
+                const eventId = document.getElementById('edit-event-id').value;
+                const response = await fetch(`${window.baseUrl}/events/${eventId}/sync-to-google`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // If there's a redirect URL, user needs to authenticate
+                    if (result.redirect) {
+                        Swal.fire({
+                            title: 'Authentication Required',
+                            text: result.message || 'You need to authenticate with Google Calendar',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#22c55e',
+                            confirmButtonText: 'Connect Now',
+                            cancelButtonText: 'Cancel'
+                        }).then((swalResult) => {
+                            if (swalResult.isConfirmed) {
+                                window.location.href = result.redirect;
+                            }
+                        });
+                    } else if (result.alreadySynced) {
+                        // Already synced
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Already Synced',
+                            text: result.message || 'This event is already synced with Google Calendar',
+                            confirmButtonColor: '#22c55e'
+                        });
+                        // Hide the sync button
+                        syncButton.classList.add('hidden');
+                    } else {
+                        // Success
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: result.message || 'Event synced successfully to Google Calendar!',
+                            confirmButtonColor: '#22c55e'
+                        }).then(() => {
+                            // Hide the sync button after successful sync
+                            syncButton.classList.add('hidden');
+                            // Refresh calendar
+                            if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                                window.calendar.refetchEvents();
+                            }
+                        });
+                    }
+                } else {
+                    throw new Error(result.message || 'Failed to sync event');
+                }
+            } catch (error) {
+                console.error('Error syncing event to Google Calendar:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Sync Failed',
+                    text: error.message || 'Failed to sync event. Please try again.',
+                    confirmButtonColor: '#22c55e'
+                });
+            } finally {
+                // Restore button state
+                syncButton.disabled = false;
+                syncButton.innerHTML = originalText;
+            }
+        };
+    } else {
+        syncButton.classList.add('hidden');
+    }
 
     // If Google event but not authenticated, show warning
     if (window.currentEditingGoogleEvent) {

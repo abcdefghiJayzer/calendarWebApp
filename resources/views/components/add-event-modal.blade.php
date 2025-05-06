@@ -167,7 +167,7 @@
         // Add backdrop
         const backdrop = document.createElement('div');
         backdrop.id = 'add-backdrop';
-        backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+        backdrop.className = 'fixed inset-0 bg-black/2 z-[998] transition-opacity duration-300';
         backdrop.onclick = closeModal;
         document.body.appendChild(backdrop);
 

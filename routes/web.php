@@ -35,6 +35,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/google/events', [CalendarController::class, 'storeGoogleEvent'])->name('google.events.store');
     Route::post('/google/events/{eventId}', [CalendarController::class, 'updateGoogleEvent'])->name('google.events.update');
     Route::delete('/google/events/{eventId}', [CalendarController::class, 'destroyGoogleEvent'])->name('google.events.destroy');
+
+    // Sync local event to Google Calendar
+    Route::post('/events/{id}/sync-to-google', [CalendarController::class, 'syncToGoogle'])->name('events.sync-to-google');
+
+    // Sync all local events to Google Calendar
+    Route::post('/sync-all-to-google', [CalendarController::class, 'syncAllToGoogle'])->name('events.sync-all-to-google');
 });
 
 // Debug route to view session data

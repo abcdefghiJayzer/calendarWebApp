@@ -23,6 +23,8 @@
 
 <script>
     let currentEventId = null;
+    const currentUserId = @json(auth()->id());
+    const currentUserDivision = @json(auth()->user()->division);
 
     function openEventModal(event) {
         currentEventId = event.id;
@@ -33,11 +35,10 @@
         // Add backdrop
         const backdrop = document.createElement('div');
         backdrop.id = 'details-backdrop';
-        backdrop.className = 'fixed inset-0 bg-black/20 z-[998] transition-opacity duration-300';
+        backdrop.className = 'fixed inset-0 bg-black/3 z-[998] transition-opacity duration-300';
         backdrop.onclick = closeEventModal;
         document.body.appendChild(backdrop);
 
-        // Prevent body scroll
         document.body.style.overflow = 'hidden';
 
         const title = document.getElementById('event-title');
@@ -49,6 +50,9 @@
         const startDate = new Date(event.start).toLocaleString();
         const endDate = event.end ? new Date(event.end).toLocaleString() : 'Not specified';
 
+        // Debug event object to see what we're working with
+        console.log('Event object:', event);
+
         content.innerHTML = `
             <p><strong>Description:</strong> ${event.extendedProps.description || 'No description'}</p>
             <p><strong>Start:</strong> ${startDate}</p>
@@ -56,45 +60,26 @@
             <p><strong>Location:</strong> ${event.extendedProps.location || 'No location'}</p>
             <p><strong>All Day:</strong> ${event.allDay ? 'Yes' : 'No'}</p>
             ${event.extendedProps.guests ? `
-            <div class="mt-4">
-                <strong>Guests:</strong>
-                <ul class="list-disc ml-5">
-                    ${event.extendedProps.guests.map(guest => `<li>${guest}</li>`).join('')}
-                </ul>
-            </div>` : ''}
+                <div class="mt-4">
+                    <strong>Guests:</strong>
+                    <ul class="list-disc ml-5">
+                        ${event.extendedProps.guests.map(guest => `<li>${guest}</li>`).join('')}
+                    </ul>
+                </div>` : ''}
         `;
 
-        // Debug user ID comparison
-        const currentUserId = {{ auth()->id() }};
-        console.log('Event data:', event);
-        console.log('Event extended props:', event.extendedProps);
+        // Get event creator ID
+        let eventCreatorId = event.extendedProps?.user_id || event.user_id || null;
 
-        // Get user_id from wherever it might be (direct property or in extendedProps)
-        let eventCreatorId = null;
-        if (event.extendedProps && event.extendedProps.user_id) {
-            eventCreatorId = parseInt(event.extendedProps.user_id);
-        } else if (event.user_id) {
-            eventCreatorId = parseInt(event.user_id);
-        }
-
-        console.log('Current user ID:', currentUserId, 'Event creator ID:', eventCreatorId);
-
-        // Show edit/delete buttons if user is the creator or an admin
-        const isAdmin = "{{ auth()->user()->division }}" === "institute";
-        if (isAdmin || (eventCreatorId && currentUserId == eventCreatorId)) {
-            actionButtons.innerHTML = `
-                <button onclick="editEvent()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
-                    Edit
-                </button>
-                <button onclick="deleteEvent()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                    Delete
-                </button>
-            `;
-        } else {
-            actionButtons.innerHTML = `
-                <p class="text-sm text-gray-500 italic">Only the creator of this event can edit or delete it</p>
-            `;
-        }
+        // Remove the permission check entirely and always show action buttons
+        actionButtons.innerHTML = `
+            <button onclick="editEvent()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                Edit
+            </button>
+            <button onclick="deleteEvent()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                Delete
+            </button>
+        `;
     }
 
     function closeEventModal() {
@@ -226,7 +211,7 @@
                             text: 'Event deleted successfully!',
                             confirmButtonColor: '#22c55e'
                         }).then(() => {
-                            location.reload();
+                            window.calendar.refetchEvents();
                         });
                     } catch (error) {
                         console.error('Error in deleteEvent:', error);
@@ -238,17 +223,47 @@
                         });
                     }
                 } else {
-                    // Regular event deletion
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = `${window.baseUrl}/events/${currentEventId}`;
-                    form.innerHTML = `
-                        <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
-                        <input type="hidden" name="_method" value="DELETE">
-                    `;
-                    document.body.appendChild(form);
-                    closeEventModal();
-                    form.submit();
+                    // Replace form submission with fetch API to handle responses
+                    try {
+                        const response = await fetch(`${window.baseUrl}/events/${currentEventId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            closeEventModal();
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success',
+                                text: data.message || 'Event deleted successfully!',
+                                confirmButtonColor: '#22c55e'
+                            }).then(() => {
+                                window.calendar.refetchEvents();
+                            });
+                        } else {
+                            // Handle error responses with a modal
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Permission Denied',
+                                text: data.message || 'You do not have permission to delete this event.',
+                                confirmButtonColor: '#22c55e'
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Error deleting event:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Failed to delete the event: ' + error.message,
+                            confirmButtonColor: '#22c55e'
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error deleting event:', error);

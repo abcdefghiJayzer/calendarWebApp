@@ -100,11 +100,19 @@ class GoogleAuthController extends Controller
                     // Update the user's google_calendar_id
                     if ($user) {
                         $user->google_calendar_id = $googleEmail;
+
+                        // Store Google tokens in the database
+                        $user->google_access_token = json_encode($token);
+                        if (isset($token['refresh_token'])) {
+                            $user->google_refresh_token = $token['refresh_token'];
+                        }
+
                         $user->save();
-                        Log::info('Successfully updated Google Calendar ID', [
+                        Log::info('Successfully updated Google Calendar credentials', [
                             'user_id' => $user->id,
                             'user_email' => $user->email,
-                            'google_calendar_id' => $googleEmail
+                            'google_calendar_id' => $googleEmail,
+                            'has_refresh_token' => isset($token['refresh_token'])
                         ]);
                     } else {
                         Log::error('No user found to update Google Calendar ID');
@@ -139,11 +147,15 @@ class GoogleAuthController extends Controller
         Session::forget('google_calendar_last_sync');
         Session::save();
 
-        // Remove google_calendar_id from user
+        // Remove all Google Calendar related data from user
         $user = Auth::user();
         if ($user) {
             $user->google_calendar_id = null;
+            $user->google_access_token = null;
+            $user->google_refresh_token = null;
             $user->save();
+
+            Log::info('Cleared Google Calendar credentials from user', ['user_id' => $user->id]);
         }
 
         Log::info('User disconnected from Google Calendar');

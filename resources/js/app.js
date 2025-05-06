@@ -534,4 +534,104 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('Error initializing calendar:', error);
         }
     }
+
+    // Add sync all to Google Calendar functionality
+    const syncAllBtn = document.getElementById('sync-all-to-google');
+    if (syncAllBtn) {
+        syncAllBtn.addEventListener('click', async function() {
+            // Check if Google is authenticated
+            const calendarEl = document.getElementById('calendar');
+            const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+            if (!isAuthenticated) {
+                Swal.fire({
+                    title: 'Google Authentication Required',
+                    text: 'You need to connect your Google account first',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#22c55e',
+                    confirmButtonText: 'Connect Google Account',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = `${window.baseUrl}/google/auth`;
+                    }
+                });
+                return;
+            }
+
+            // Show loading state
+            syncAllBtn.disabled = true;
+            syncAllBtn.innerHTML = `
+                <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Syncing...
+            `;
+
+            try {
+                const response = await fetch(`${window.baseUrl}/sync-all-to-google`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // If there's a redirect URL, user needs to authenticate
+                    if (result.redirect) {
+                        Swal.fire({
+                            title: 'Authentication Required',
+                            text: result.message || 'You need to authenticate with Google Calendar',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#22c55e',
+                            confirmButtonText: 'Connect Now',
+                            cancelButtonText: 'Cancel'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = result.redirect;
+                            }
+                        });
+                    } else {
+                        // Success message
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: result.message || 'Events synced successfully!',
+                            confirmButtonColor: '#22c55e'
+                        }).then(() => {
+                            if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                                window.calendar.refetchEvents();
+                            }
+                        });
+                    }
+                } else {
+                    throw new Error(result.message || 'Failed to sync events');
+                }
+            } catch (error) {
+                console.error('Error syncing events to Google Calendar:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Sync Failed',
+                    text: error.message || 'Failed to sync events. Please try again.',
+                    confirmButtonColor: '#22c55e'
+                });
+            } finally {
+                // Restore button state
+                syncAllBtn.disabled = false;
+                syncAllBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    Sync All Events to Google
+                `;
+            }
+        });
+    }
 });

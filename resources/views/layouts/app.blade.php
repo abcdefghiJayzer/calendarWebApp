@@ -28,7 +28,7 @@
         <x-sidebar />
 
         <!-- Main content -->
-        <div class="flex flex-col flex-1 ml-64">
+        <div class="flex flex-col flex-1 ml-80">
             <!-- Page content -->
             <main class="flex-1">
                 @if(session('success'))

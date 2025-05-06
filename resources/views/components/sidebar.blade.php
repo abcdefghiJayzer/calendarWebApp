@@ -1,4 +1,4 @@
-<aside class="fixed top-0 left-0 h-full w-64 bg-green-800 border-r flex flex-col">
+<aside class="fixed top-0 left-0 h-full w-80 bg-green-800 border-r flex flex-col">
     <div class="flex items-center justify-center h-16 border-b border-green-700">
         <a href="/" class="text-xl font-semibold text-white">Calendar</a>
     </div>
@@ -40,6 +40,23 @@
                     class="py-1 px-3 bg-red-600 text-white text-sm rounded hover:bg-red-500 hidden">
                     Disconnect
                 </button>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+                Google Calendar connection is needed to view, create, and edit Google Calendar events.
+            </div>
+
+            <!-- Add sync all to Google Calendar section -->
+            <div class="border-t mt-4 pt-4">
+                <h3 class="text-sm font-semibold text-gray-700">Sync Operations</h3>
+                <button id="sync-all-to-google" class="mt-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs w-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    Sync All Events to Google
+                </button>
+                <div class="text-xs text-gray-500 mt-1">
+                    Push all your local calendar events to Google Calendar.
+                </div>
             </div>
         </div>
 
@@ -255,7 +272,8 @@
                     status: document.getElementById('sidebar-google-status'),
                     connect: document.getElementById('sidebar-connect-btn'),
                     disconnect: document.getElementById('sidebar-disconnect-btn'),
-                    account: document.getElementById('sidebar-google-account')
+                    account: document.getElementById('sidebar-google-account'),
+                    syncAll: document.getElementById('sync-all-to-google')
                 };
 
                 if (data.authenticated) {
@@ -263,6 +281,11 @@
                     elements.status.classList.add('text-green-300');
                     elements.connect.classList.add('hidden');
                     elements.disconnect.classList.remove('hidden');
+
+                    // Show sync all button only when authenticated
+                    if (elements.syncAll) {
+                        elements.syncAll.classList.remove('hidden');
+                    }
 
                     if (data.email) {
                         const previousAccount = sessionStorage.getItem('connected_google_account');
@@ -281,8 +304,126 @@
                     elements.disconnect.classList.add('hidden');
                     elements.account.classList.add('hidden');
                     sessionStorage.removeItem('connected_google_account');
+
+                    // Hide sync all button when not authenticated
+                    if (elements.syncAll) {
+                        elements.syncAll.classList.add('hidden');
+                    }
                 }
             })
             .catch(error => console.error('Google auth status error:', error));
     }
+
+    // Handle sync all events to Google
+    document.addEventListener('DOMContentLoaded', function() {
+        const syncAllButton = document.getElementById('sync-all-to-google');
+        if (syncAllButton) {
+            syncAllButton.addEventListener('click', function() {
+                // Only proceed if user is authenticated with Google
+                const calendarEl = document.getElementById('calendar');
+                const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+                if (!isAuthenticated) {
+                    Swal.fire({
+                        title: 'Google Authentication Required',
+                        text: 'You need to connect your Google account first',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#22c55e',
+                        confirmButtonText: 'Connect Google Account',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = "{{ route('google.auth') }}";
+                        }
+                    });
+                    return;
+                }
+
+                // Show confirmation dialog
+                Swal.fire({
+                    title: 'Sync All Events to Google',
+                    text: 'This will push all your local calendar events to Google Calendar. Already synced events will be skipped. Continue?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#22c55e',
+                    confirmButtonText: 'Yes, Sync All',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Show loading state
+                        syncAllButton.disabled = true;
+                        const originalText = syncAllButton.innerHTML;
+                        syncAllButton.innerHTML = `
+                            <svg class="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Syncing...
+                        `;
+
+                        // Make API call to sync all events
+                        fetch('{{ route("events.sync-all-to-google") }}', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            // Restore button state
+                            syncAllButton.disabled = false;
+                            syncAllButton.innerHTML = originalText;
+
+                            if (data.success) {
+                                // Show success message with details
+                                let message = `Successfully synced ${data.results.success.length} events to Google Calendar.`;
+                                if (data.results.skipped.length > 0) {
+                                    message += `\n${data.results.skipped.length} events were already synced.`;
+                                }
+                                if (data.results.failed.length > 0) {
+                                    message += `\n${data.results.failed.length} events failed to sync.`;
+                                }
+
+                                Swal.fire({
+                                    title: 'Sync Complete',
+                                    text: message,
+                                    icon: 'success',
+                                    confirmButtonColor: '#22c55e'
+                                }).then(() => {
+                                    // Refresh calendar to show updated events
+                                    if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
+                                        window.calendar.refetchEvents();
+                                    }
+                                });
+                            } else {
+                                // Show error message
+                                Swal.fire({
+                                    title: 'Sync Failed',
+                                    text: data.message || 'Failed to sync events to Google Calendar',
+                                    icon: 'error',
+                                    confirmButtonColor: '#22c55e'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            // Restore button state and show error
+                            syncAllButton.disabled = false;
+                            syncAllButton.innerHTML = originalText;
+
+                            console.error('Error syncing events to Google:', error);
+                            Swal.fire({
+                                title: 'Sync Error',
+                                text: 'An error occurred while syncing events. Please try again.',
+                                icon: 'error',
+                                confirmButtonColor: '#22c55e'
+                            });
+                        });
+                    }
+                });
+            });
+        }
+    });
 </script>

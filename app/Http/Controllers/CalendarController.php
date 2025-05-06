@@ -325,8 +325,60 @@ class CalendarController extends Controller
                 $event->participants()->detach();
             }
 
+            // If this event is connected to Google Calendar, update the Google event as well
+            $googleUpdated = false;
+            if ($event->google_event_id && $this->googleCalendarService->isAuthenticated()) {
+                try {
+                    // Prepare event data for Google Calendar
+                    $googleEventData = [
+                        'title' => $event->title,
+                        'description' => $event->description,
+                        'start_date' => $event->start_date,
+                        'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
+                        'location' => $event->location,
+                        'color' => $event->color,
+                        'guests' => $event->participants->pluck('email')->toArray(),
+                        'is_all_day' => $event->is_all_day
+                    ];
+
+                    // Use user's stored Google credentials from database
+                    $user = auth()->user();
+
+                    // Load and use the Google tokens from the database regardless of session state
+                    $this->googleCalendarService->useUserTokens($user);
+
+                    // Update the Google Calendar event
+                    $this->googleCalendarService->updateEvent($event->google_event_id, $googleEventData);
+                    \Log::info('Google Calendar event updated with local changes', [
+                        'event_id' => $event->id,
+                        'google_event_id' => $event->google_event_id
+                    ]);
+                    $googleUpdated = true;
+                } catch (\Exception $e) {
+                    \Log::error('Failed to update Google Calendar event', [
+                        'event_id' => $event->id,
+                        'google_event_id' => $event->google_event_id,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Continue with the response even if Google update fails
+                    // We don't want to prevent updating the local event if Google sync fails
+                }
+            }
+
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => true, 'message' => 'Event updated successfully']);
+                $response = [
+                    'success' => true,
+                    'message' => 'Event updated successfully'
+                ];
+
+                if ($event->google_event_id) {
+                    $response['google_synced'] = $googleUpdated;
+                    if (!$googleUpdated) {
+                        $response['google_sync_message'] = 'Note: The event was updated locally, but we couldn\'t sync the changes to Google Calendar.';
+                    }
+                }
+
+                return response()->json($response);
             }
 
             return redirect()->route('home')->with('success', 'Event updated successfully!');
@@ -569,16 +621,213 @@ class CalendarController extends Controller
         }
     }
 
+    /**
+     * Sync all local events to Google Calendar
+     */
+    public function syncAllToGoogle(Request $request)
+    {
+        try {
+            // Check if user is authenticated with Google Calendar
+            if (!$this->googleCalendarService->isAuthenticated()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You must connect your Google account first',
+                    'redirect' => route('google.auth')
+                ]);
+            }
+
+            // Use the syncMultipleEvents method from the service
+            $results = $this->googleCalendarService->syncMultipleEvents();
+
+            // Count results
+            $successCount = count($results['success']);
+            $skippedCount = count($results['skipped']);
+            $failedCount = count($results['failed']);
+
+            // Log the operation
+            \Log::info('Bulk sync to Google Calendar completed', [
+                'user_id' => auth()->id(),
+                'success_count' => $successCount,
+                'skipped_count' => $skippedCount,
+                'failed_count' => $failedCount
+            ]);
+
+            if ($successCount > 0) {
+                $message = "{$successCount} event" . ($successCount > 1 ? 's' : '') . " successfully synced to Google Calendar";
+                if ($skippedCount > 0) {
+                    $message .= ", {$skippedCount} already synced";
+                }
+                if ($failedCount > 0) {
+                    $message .= ", {$failedCount} failed";
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'results' => $results
+                ]);
+            } elseif ($skippedCount > 0 && $successCount === 0 && $failedCount === 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'All events are already synced with Google Calendar',
+                    'results' => $results
+                ]);
+            } else {
+                return response()->json([
+                    'success' => $successCount > 0,
+                    'message' => $failedCount > 0
+                        ? "Failed to sync {$failedCount} events"
+                        : "No events to sync",
+                    'results' => $results
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error syncing all events to Google Calendar: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync events: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sync a single local event to Google Calendar
+     */
+    public function syncToGoogle(Request $request, $id)
+    {
+        try {
+            // Find the event with its participants
+            $event = Event::with('participants')->findOrFail($id);
+
+            // Check ownership
+            if ($event->user_id !== auth()->id()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You can only sync events you created'
+                ], 403);
+            }
+
+            $user = auth()->user();
+
+            // Check if user has Google tokens in database
+            if (empty($user->google_access_token)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You must connect your Google account first',
+                    'redirect' => route('google.auth')
+                ]);
+            }
+
+            // Use the stored tokens from the database
+            $this->googleCalendarService->useUserTokens($user);
+
+            // Check if already synced and the Google event still exists
+            if ($event->google_event_id) {
+                try {
+                    // Try to retrieve the event from Google to verify it exists
+                    $googleEvent = $this->googleCalendarService->getEvent($event->google_event_id);
+
+                    if ($googleEvent) {
+                        // Event exists in Google Calendar, no need to recreate
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'This event is already synced with Google Calendar',
+                            'alreadySynced' => true,
+                            'google_event_id' => $event->google_event_id
+                        ]);
+                    } else {
+                        // Google event doesn't exist anymore, clear the ID so we can recreate it
+                        \Log::info('Google event not found, will recreate', [
+                            'event_id' => $event->id,
+                            'google_event_id' => $event->google_event_id
+                        ]);
+                        $event->google_event_id = null;
+                    }
+                } catch (\Exception $e) {
+                    // Error checking Google event - assume it's gone and we need to recreate
+                    \Log::warning('Error checking if Google event exists, will recreate', [
+                        'event_id' => $event->id,
+                        'google_event_id' => $event->google_event_id,
+                        'error' => $e->getMessage()
+                    ]);
+                    $event->google_event_id = null;
+                }
+            }
+
+            // Prepare event data for Google Calendar with proper formatting
+            $data = [
+                'title' => $event->title,
+                'description' => $event->description,
+                'start_date' => $event->start_date,
+                'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
+                'location' => $event->location,
+                'color' => $event->color,
+                'guests' => $event->participants->pluck('email')->toArray(),
+                'is_all_day' => $event->is_all_day
+            ];
+
+            // Validate dates before proceeding
+            $startTimestamp = strtotime($data['start_date']);
+            $endTimestamp = strtotime($data['end_date']);
+
+            if (!$startTimestamp || !$endTimestamp) {
+                throw new \Exception("Invalid date format: Start: {$data['start_date']}, End: {$data['end_date']}");
+            }
+
+            // Create the event in Google Calendar
+            $googleEvent = $this->googleCalendarService->createEvent($data);
+
+            // Update the local event with the Google event ID
+            $event->google_event_id = $googleEvent->id;
+            $event->save();
+
+            \Log::info('Event synced to Google Calendar', [
+                'event_id' => $event->id,
+                'google_event_id' => $googleEvent->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Event successfully synced to Google Calendar',
+                'google_event_id' => $googleEvent->id
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error syncing event to Google Calendar: ' . $e->getMessage(), [
+                'event_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $errorMessage = $e->getMessage();
+            // Check for specific Google API errors and provide better messages
+            if (strpos($errorMessage, 'Invalid') !== false && strpos($errorMessage, 'date') !== false) {
+                $errorMessage = 'Failed to sync: The event has invalid date values. Please check the start and end dates.';
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage
+            ], 500);
+        }
+    }
+
     protected function getGoogleEvents()
     {
         try {
-            if (!$this->googleCalendarService->isAuthenticated()) {
-                \Log::info('User not authenticated with Google Calendar');
+            $user = auth()->user();
+
+            // Check if the user has Google tokens stored in the database
+            if (empty($user->google_access_token)) {
+                \Log::info('User has no Google access token stored');
                 return [];
             }
 
+            // Use the stored tokens from the database
+            $this->googleCalendarService->useUserTokens($user);
+
             // Debug user's Google Calendar ID
-            $user = \Auth::user();
             \Log::info('User google_calendar_id:', [
                 'user_id' => $user->id,
                 'google_calendar_id' => $user->google_calendar_id
@@ -594,10 +843,28 @@ class CalendarController extends Controller
 
             \Log::info('Raw Google events fetched:', ['count' => count($googleEvents)]);
 
+            // Get list of Google event IDs that are already linked to local events
+            // These should be excluded to prevent duplication
+            $syncedGoogleEventIds = Event::whereNotNull('google_event_id')
+                ->pluck('google_event_id')
+                ->toArray();
+
+            \Log::info('Found synced Google event IDs in local database:', [
+                'count' => count($syncedGoogleEventIds)
+            ]);
+
             // Format Google events to match the format expected by the calendar
             $formattedEvents = [];
 
             foreach ($googleEvents as $event) {
+                // Skip this Google event if it's already linked to a local event
+                if (in_array($event->getId(), $syncedGoogleEventIds)) {
+                    \Log::debug('Skipping Google event that is already synced locally', [
+                        'google_event_id' => $event->getId()
+                    ]);
+                    continue;
+                }
+
                 // Extract start and end date information
                 $start = null;
                 $end = null;
@@ -663,7 +930,7 @@ class CalendarController extends Controller
                 ];
             }
 
-            \Log::info('Formatted Google events:', ['count' => count($formattedEvents)]);
+            \Log::info('Formatted Google events (after removing duplicates):', ['count' => count($formattedEvents)]);
             return $formattedEvents;
 
         } catch (\Exception $e) {
