@@ -92,7 +92,7 @@ class CalendarController extends Controller
             ];
 
             // Get the mapped calendar type or keep original if no mapping exists
-            $mappedCalendarType = $calendarTypeMap[$event->calendar_type] ?? $event->calendar_type;
+            $mappedCalendarType = $calendarTypeMap[$event['calendar_type']] ?? $event['calendar_type'];
 
             // Ensure user_id is consistently passed as a number
             if (isset($data['user_id'])) {
@@ -100,7 +100,7 @@ class CalendarController extends Controller
             }
 
             // Hide details if event is private and user is not the owner
-            if ($event->private && $event->user_id !== auth()->id()) {
+            if ($event['private'] && $event['user_id'] !== auth()->id()) {
                 $data['title'] = 'Private Event';
                 $data['backgroundColor'] = '#808080'; // Grey color for private events
                 $data['extendedProps'] = [
@@ -109,16 +109,16 @@ class CalendarController extends Controller
                     'guests' => [],
                     'calendarType' => $mappedCalendarType,
                     'private' => true,
-                    'user_id' => $event->user_id
+                    'user_id' => $event['user_id']
                 ];
             } else {
                 $data['extendedProps'] = [
-                    'description' => $event->description,
-                    'location' => $event->location,
-                    'guests' => $event->participants->pluck('email'),
+                    'description' => $event['description'],
+                    'location' => $event['location'],
+                    'guests' => $event['participants']->pluck('email'),
                     'calendarType' => $mappedCalendarType,
-                    'private' => $event->private,
-                    'user_id' => (int)$event->user_id  // Cast to integer to ensure type consistency
+                    'private' => $event['private'],
+                    'user_id' => (int)$event['user_id']  // Cast to integer to ensure type consistency
                 ];
             }
 
@@ -636,59 +636,179 @@ class CalendarController extends Controller
                 ]);
             }
 
-            // Use the syncMultipleEvents method from the service
-            $results = $this->googleCalendarService->syncMultipleEvents();
+            $user = auth()->user();
+            $isAdmin = $user->division === 'institute';
+            $isDivisionHead = $user->is_division_head;
+
+            // Build query based on user's permissions
+            $eventsQuery = Event::with('participants');
+
+            if ($isAdmin) {
+                // Admin sees institute and all sector-level events
+                $eventsQuery->where(function ($query) {
+                    $query->where('calendar_type', 'institute')
+                          ->orWhereIn('calendar_type', ['sector1', 'sector2', 'sector3', 'sector4']);
+                });
+            } else if ($isDivisionHead) {
+                $userSector = explode('_', $user->division)[0];
+                $eventsQuery->where(function($query) use ($user, $userSector) {
+                    $query->where('calendar_type', 'institute')
+                          ->orWhere('calendar_type', $userSector)
+                          ->orWhere('calendar_type', $user->division);
+                });
+            } else {
+                $eventsQuery->where(function($query) use ($user) {
+                    $query->where('calendar_type', 'institute')
+                          ->orWhere('calendar_type', $user->division);
+                });
+            }
+
+            // Get all events that need syncing
+            $events = $eventsQuery->get();
+
+            \Log::info('Starting sync process with events', [
+                'user_id' => $user->id,
+                'total_events' => $events->count()
+            ]);
+
+            $results = [
+                'success' => [],
+                'skipped' => [],
+                'failed' => []
+            ];
+
+            foreach ($events as $event) {
+                try {
+                    $shouldSync = true;
+                    $syncReason = '';
+
+                    // Check if event has a Google Calendar ID
+                    if ($event->google_event_id) {
+                        try {
+                            // Try to get the event from Google Calendar
+                            $googleEvent = $this->googleCalendarService->getEvent($event->google_event_id);
+                            
+                            if ($googleEvent) {
+                                // Verify the event still exists and matches
+                                if ($googleEvent->getSummary() === $event->title) {
+                                    $shouldSync = false;
+                                    $syncReason = 'Already synced and exists in Google Calendar';
+                                } else {
+                                    // Event exists but doesn't match, clear ID to re-sync
+                                    $event->google_event_id = null;
+                                    $event->save();
+                                    $syncReason = 'Re-syncing due to mismatch with Google Calendar event';
+                                }
+                            } else {
+                                // Event doesn't exist in Google Calendar anymore
+                                $event->google_event_id = null;
+                                $event->save();
+                                $syncReason = 'Re-syncing deleted event';
+                            }
+                        } catch (\Exception $e) {
+                            // Error checking Google event - assume it's gone
+                            $event->google_event_id = null;
+                            $event->save();
+                            $syncReason = 'Re-syncing due to error checking Google Calendar';
+                        }
+                    } else {
+                        $syncReason = 'New event to sync';
+                    }
+
+                    if ($shouldSync) {
+                        // Prepare event data for Google Calendar
+                        $data = [
+                            'title' => $event->title,
+                            'description' => $event->description,
+                            'start_date' => $event->start_date,
+                            'end_date' => $event->end_date ?: $event->start_date,
+                            'location' => $event->location,
+                            'color' => $event->color,
+                            'guests' => $event->participants->pluck('email')->toArray(),
+                            'is_all_day' => $event->is_all_day
+                        ];
+
+                        // Create event in Google Calendar
+                        $googleEvent = $this->googleCalendarService->createEvent($data);
+
+                        // Update local event with Google event ID
+                        $event->google_event_id = $googleEvent->getId();
+                        $event->save();
+
+                        $results['success'][] = [
+                            'id' => $event->id,
+                            'title' => $event->title,
+                            'google_event_id' => $googleEvent->getId(),
+                            'reason' => $syncReason
+                        ];
+                    } else {
+                        $results['skipped'][] = [
+                            'id' => $event->id,
+                            'title' => $event->title,
+                            'reason' => $syncReason
+                        ];
+                    }
+
+                } catch (\Exception $e) {
+                    \Log::error('Failed to sync event', [
+                        'event_id' => $event->id,
+                        'error' => $e->getMessage()
+                    ]);
+
+                    $results['failed'][] = [
+                        'id' => $event->id,
+                        'title' => $event->title,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
 
             // Count results
             $successCount = count($results['success']);
             $skippedCount = count($results['skipped']);
             $failedCount = count($results['failed']);
 
-            // Log the operation
-            \Log::info('Bulk sync to Google Calendar completed', [
-                'user_id' => auth()->id(),
-                'success_count' => $successCount,
-                'skipped_count' => $skippedCount,
-                'failed_count' => $failedCount
+            // Prepare response message
+            $message = '';
+            if ($successCount > 0) {
+                $message = "Successfully synced {$successCount} event" . ($successCount > 1 ? 's' : '') . " to Google Calendar.";
+            } else if ($failedCount > 0) {
+                $message = "Failed to sync {$failedCount} event" . ($failedCount > 1 ? 's' : '') . ". Please try again.";
+            } else if ($skippedCount > 0) {
+                $message = "All events are already synced with Google Calendar.";
+            } else {
+                $message = "No events found to sync.";
+            }
+
+            // Check if this is an automatic sync (from login)
+            $isAutomaticSync = !$request->ajax() && !$request->wantsJson();
+            if ($isAutomaticSync) {
+                return $message;
+            }
+
+            // For manual sync (AJAX/JSON requests), return JSON response
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'results' => $results
             ]);
 
-            if ($successCount > 0) {
-                $message = "{$successCount} event" . ($successCount > 1 ? 's' : '') . " successfully synced to Google Calendar";
-                if ($skippedCount > 0) {
-                    $message .= ", {$skippedCount} already synced";
-                }
-                if ($failedCount > 0) {
-                    $message .= ", {$failedCount} failed";
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $message,
-                    'results' => $results
-                ]);
-            } elseif ($skippedCount > 0 && $successCount === 0 && $failedCount === 0) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'All events are already synced with Google Calendar',
-                    'results' => $results
-                ]);
-            } else {
-                return response()->json([
-                    'success' => $successCount > 0,
-                    'message' => $failedCount > 0
-                        ? "Failed to sync {$failedCount} events"
-                        : "No events to sync",
-                    'results' => $results
-                ]);
-            }
         } catch (\Exception $e) {
-            \Log::error('Error syncing all events to Google Calendar: ' . $e->getMessage(), [
+            \Log::error('Error in sync process: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
 
+            $errorMessage = 'Failed to sync events: ' . $e->getMessage();
+            
+            // Check if this is an automatic sync
+            $isAutomaticSync = !$request->ajax() && !$request->wantsJson();
+            if ($isAutomaticSync) {
+                return $errorMessage;
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to sync events: ' . $e->getMessage()
+                'message' => $errorMessage
             ], 500);
         }
     }
@@ -865,6 +985,15 @@ class CalendarController extends Controller
                     continue;
                 }
 
+                // Skip events that were created by our app (they will be shown from local DB)
+                if ($event->getCreator() && $event->getCreator()->getEmail() === $user->email) {
+                    \Log::debug('Skipping Google event created by our app', [
+                        'google_event_id' => $event->getId(),
+                        'creator' => $event->getCreator()->getEmail()
+                    ]);
+                    continue;
+                }
+
                 // Extract start and end date information
                 $start = null;
                 $end = null;
@@ -925,7 +1054,8 @@ class CalendarController extends Controller
                         'location' => $event->getLocation(),
                         'guests' => $attendees,
                         'calendarType' => 'google',
-                        'source' => 'google'
+                        'source' => 'google',
+                        'google_event_id' => $event->getId()
                     ]
                 ];
             }
