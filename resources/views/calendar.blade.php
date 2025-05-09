@@ -7,7 +7,7 @@
         data-api-key="{{ config('services.google.calendar.api_key') }}"
         data-calendar-id="{{ config('services.google.calendar.calendar_id') }}"
         data-is-authenticated="{{ $isGoogleAuthenticated ? 'true' : 'false' }}"
-        class="bg-white h-full">
+        class="bg-gray-50/50 h-full">
     </div>
 </div>
 

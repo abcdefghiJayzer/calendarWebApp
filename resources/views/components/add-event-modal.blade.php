@@ -1,38 +1,40 @@
 <div id="add-event-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
-    <div class="h-full bg-white shadow-xl shadow-black/10">
-        <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Create Event</h2>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+    <div class="h-full bg-gray-50 shadow-xl shadow-black/10">
+        <div class="p-8 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-gray-800">Create Event</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
 
-            <form id="add-event-form" action="{{ route('events.store') }}" method="POST" class="space-y-4">
+            <form id="add-event-form" action="{{ route('events.store') }}" method="POST" class="space-y-5">
                 @csrf
 
-                <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
-                <div class="flex space-x-3 mt-2">
-                    @foreach([
-                    '#3b82f6' => 'bg-blue-500',
-                    '#ef4444' => 'bg-red-500',
-                    '#eab308' => 'bg-yellow-500',
-                    '#22c55e' => 'bg-green-500',
-                    '#000000' => 'bg-black'
-                    ] as $hex => $bg)
-                    <label class="cursor-pointer color-option rounded-full" data-color="{{ $hex }}">
-                        <input type="radio" name="color" value="{{ $hex }}" {{ $hex === '#3b82f6' ? 'checked' : '' }} class="hidden">
-                        <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} {{ $hex === '#3b82f6' ? 'ring-4 ring-offset-2 ring-blue-300' : '' }}"></div>
-                    </label>
-                    @endforeach
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
+                    <div class="flex space-x-3">
+                        @foreach([
+                        '#3b82f6' => 'bg-blue-500',
+                        '#ef4444' => 'bg-red-500',
+                        '#eab308' => 'bg-yellow-500',
+                        '#22c55e' => 'bg-green-500',
+                        '#000000' => 'bg-black'
+                        ] as $hex => $bg)
+                        <label class="cursor-pointer color-option rounded-full group" data-color="{{ $hex }}">
+                            <input type="radio" name="color" value="{{ $hex }}" {{ $hex === '#3b82f6' ? 'checked' : '' }} class="hidden">
+                            <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} transition-all duration-200 group-hover:scale-110 {{ $hex === '#3b82f6' ? 'ring-4 ring-offset-2 ring-blue-300' : '' }}"></div>
+                        </label>
+                        @endforeach
+                    </div>
                 </div>
 
-                <div class="mb-4">
+                <div class="space-y-2">
                     <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <div class="border p-2 rounded">
-                        <select name="calendar_type" id="calendar_type" required class="outline-none border-none w-full">
+                    <div class="relative">
+                        <select name="calendar_type" id="calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                             @if(auth()->user()->division === 'institute')
                                 <option value="institute">Institute-wide Calendar (For All Divisions)</option>
                                 <optgroup label="Sector Calendars">
@@ -55,7 +57,6 @@
                                 <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
                                 <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
                             @else
-                                <!-- For regular users, only show their division -->
                                 <option value="{{ auth()->user()->division }}">
                                     {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
                                 </option>
@@ -70,72 +71,69 @@
                     </p>
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-                    <div class="border p-2 rounded">
-                        <input type="text" name="title" id="title" required class="outline-none border-none w-full">
-                    </div>
+                    <input type="text" name="title" id="title" required 
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <div class="border p-2 rounded">
-                        <textarea name="description" id="description"
-                            class="outline-none border-none w-full"></textarea>
-                    </div>
+                    <textarea name="description" id="description" rows="3"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"></textarea>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
+                    <div class="space-y-2">
                         <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                        <div class="border p-2 rounded">
-                            <input type="datetime-local" name="start_date" id="start_date" required
-                                class="outline-none border-none w-full">
-                        </div>
+                        <input type="datetime-local" name="start_date" id="start_date" required
+                            class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                     </div>
 
-                    <div>
+                    <div class="space-y-2">
                         <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
-                        <div class="border p-2 rounded">
-                            <input type="datetime-local" name="end_date" id="end_date"
-                                class="outline-none border-none w-full">
-                        </div>
+                        <input type="datetime-local" name="end_date" id="end_date"
+                            class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-gray-700">Add guests</label>
-                    <div id="guest-container" class="flex flex-wrap gap-2 border p-2 rounded">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Add guests</label>
+                    <div id="guest-container" class="flex flex-wrap gap-2 p-2 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-colors">
                         <input id="guest-input" type="email" class="outline-none border-none flex-grow p-1" placeholder="Type email and press Enter">
                     </div>
                     <input type="hidden" name="guests" id="guest-hidden" value="[]">
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
-                    <div class="border p-2 rounded">
-                        <input type="text" name="location" id="location"
-                            class="outline-none border-none w-full">
-                    </div>
+                    <input type="text" name="location" id="location"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
-                <div class="flex items-center">
-                    <input type="hidden" name="is_all_day" value="0">
-                    <input type="checkbox" name="is_all_day" id="is_all_day" value="1"
-                        class="text-green-600 focus:ring-green-500 rounded">
-                    <label for="is_all_day" class="ml-2 text-sm text-gray-700">All Day Event</label>
+                <div class="flex items-center space-x-4">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="hidden" name="is_all_day" value="0">
+                        <input type="checkbox" name="is_all_day" id="is_all_day" value="1" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">All Day Event</span>
+                    </label>
+
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="hidden" name="private" value="0">
+                        <input type="checkbox" name="private" id="private" value="1" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Private Event</span>
+                    </label>
                 </div>
 
-                <div class="flex items-center mt-2">
-                    <input type="hidden" name="private" value="0">
-                    <input type="checkbox" name="private" id="private" value="1"
-                        class="text-green-600 focus:ring-green-500 rounded">
-                    <label for="private" class="ml-2 text-sm text-gray-700">Private Event</label>
-                </div>
-
-                <div class="flex justify-end space-x-2">
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="closeModal()"
+                        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
+                    </button>
                     <button type="submit"
-                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                         Create Event
                     </button>
                 </div>
@@ -207,12 +205,12 @@
         const guestInput = document.getElementById('guest-input');
 
         const span = document.createElement("span");
-        span.className = "px-2 py-1 bg-gray-200 rounded text-sm flex items-center";
+        span.className = "px-2 py-1 bg-gray-100 rounded-full text-sm flex items-center group";
         span.textContent = email;
 
         const removeBtn = document.createElement("button");
         removeBtn.innerHTML = "&times;";
-        removeBtn.className = "ml-2 text-red-500 hover:text-red-700";
+        removeBtn.className = "ml-2 text-gray-400 hover:text-red-500 transition-colors";
         removeBtn.onclick = function() {
             guests = guests.filter(g => g !== email);
             span.remove();

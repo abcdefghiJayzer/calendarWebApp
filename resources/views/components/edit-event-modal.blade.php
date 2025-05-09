@@ -1,25 +1,24 @@
 <div id="edit-event-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
-    <div class="h-full bg-white shadow-xl shadow-black/10">
-        <div class="p-10 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Edit Event</h2>
-                <button onclick="window.closeEditModal()" class="text-gray-500 hover:text-gray-700">
+    <div class="h-full bg-gray-50 shadow-xl shadow-black/10">
+        <div class="p-8 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-gray-800">Edit Event</h2>
+                <button onclick="window.closeEditModal()" class="text-gray-500 hover:text-gray-700 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
 
-            <form id="edit-event-form" class="space-y-4">
+            <form id="edit-event-form" class="space-y-5">
                 @csrf
                 <input type="hidden" id="edit-event-id" name="id">
 
-                <div class="mb-4">
+                <div class="space-y-2">
                     <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <div class="border p-2 rounded">
+                    <div class="relative">
                         @if(auth()->user()->division === 'institute')
-                            <!-- Admin users can select any calendar type -->
-                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                                 <option value="institute">Institute-wide Calendar (For All Divisions)</option>
                                 <optgroup label="Sector Calendars">
                                     <option value="sector1">Sector 1 (All Sector 1 Divisions)</option>
@@ -35,18 +34,16 @@
                                 </optgroup>
                             </select>
                         @elseif(auth()->user()->is_division_head)
-                            <!-- Division heads can modify their sector and division calendars -->
                             @php
                                 $userDivision = auth()->user()->division;
                                 $userSector = explode('_', $userDivision)[0];
                             @endphp
-                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                                 <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
                                 <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
                             </select>
                         @else
-                            <!-- Regular users can only work with their division calendar -->
-                            <select name="calendar_type" id="edit-calendar_type" required class="outline-none border-none w-full">
+                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                                 <option value="{{ auth()->user()->division }}">
                                     {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
                                 </option>
@@ -64,102 +61,94 @@
                     </p>
                 </div>
 
-                <label for="edit-color" class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
-                <div class="flex space-x-3 mt-2">
-                    @foreach([
-                        '#3b82f6' => 'bg-blue-500',
-                        '#ef4444' => 'bg-red-500',
-                        '#eab308' => 'bg-yellow-500',
-                        '#22c55e' => 'bg-green-500',
-                        '#000000' => 'bg-black'
-                    ] as $hex => $bg)
-                        <label class="cursor-pointer edit-color-option rounded-full" data-color="{{ $hex }}">
-                            <input type="radio" name="color" value="{{ $hex }}" class="hidden">
-                            <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }}"></div>
-                        </label>
-                    @endforeach
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
+                    <div class="flex space-x-3">
+                        @foreach([
+                            '#3b82f6' => 'bg-blue-500',
+                            '#ef4444' => 'bg-red-500',
+                            '#eab308' => 'bg-yellow-500',
+                            '#22c55e' => 'bg-green-500',
+                            '#000000' => 'bg-black'
+                        ] as $hex => $bg)
+                            <label class="cursor-pointer edit-color-option rounded-full group" data-color="{{ $hex }}">
+                                <input type="radio" name="color" value="{{ $hex }}" class="hidden">
+                                <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} transition-all duration-200 group-hover:scale-110"></div>
+                            </label>
+                        @endforeach
+                    </div>
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="edit-title" class="block text-sm font-medium text-gray-700">Title</label>
-                    <div class="border p-2 rounded">
-                        <input type="text" name="title" id="edit-title" required
-                            class="outline-none border-none w-full">
-                    </div>
+                    <input type="text" name="title" id="edit-title" required
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="edit-description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <div class="border p-2 rounded">
-                        <textarea name="description" id="edit-description"
-                            class="outline-none border-none w-full"></textarea>
-                    </div>
+                    <textarea name="description" id="edit-description" rows="3"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"></textarea>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
+                    <div class="space-y-2">
                         <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                        <div class="border p-2 rounded">
-                            <input type="datetime-local" name="start_date" id="edit-start-date" required
-                                class="outline-none border-none w-full">
-                        </div>
+                        <input type="datetime-local" name="start_date" id="edit-start-date" required
+                            class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                     </div>
-                    <div>
+                    <div class="space-y-2">
                         <label for="edit-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
-                        <div class="border p-2 rounded">
-                            <input type="datetime-local" name="end_date" id="edit-end-date" required
-                                class="outline-none border-none w-full">
-                        </div>
+                        <input type="datetime-local" name="end_date" id="edit-end-date" required
+                            class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-gray-700">Edit guests</label>
-                    <div id="edit-guest-container" class="flex flex-wrap gap-2 border p-2 rounded">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Edit guests</label>
+                    <div id="edit-guest-container" class="flex flex-wrap gap-2 p-2 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-colors">
                         <input id="edit-guest-input" type="email" class="outline-none border-none flex-grow p-1"
                             placeholder="Type email and press Enter">
                     </div>
                     <input type="hidden" name="guests" id="edit-guest-hidden" value="[]">
                 </div>
 
-                <div>
+                <div class="space-y-2">
                     <label for="edit-location" class="block text-sm font-medium text-gray-700">Location</label>
-                    <div class="border p-2 rounded">
-                        <input type="text" name="location" id="edit-location"
-                            class="outline-none border-none w-full">
-                    </div>
+                    <input type="text" name="location" id="edit-location"
+                        class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
-                <div class="flex items-center">
-                    <input type="hidden" name="is_all_day" value="0">
-                    <input type="checkbox" name="is_all_day" id="edit-is-all-day" value="1"
-                        class="text-green-600 focus:ring-green-500 rounded">
-                    <label for="edit-is-all-day" class="ml-2 text-sm text-gray-700">All Day Event</label>
+                <div class="flex items-center space-x-4">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="hidden" name="is_all_day" value="0">
+                        <input type="checkbox" name="is_all_day" id="edit-is-all-day" value="1" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">All Day Event</span>
+                    </label>
+
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="hidden" name="private" value="0">
+                        <input type="checkbox" name="private" id="edit-private" value="1" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Private Event</span>
+                    </label>
                 </div>
 
-                <div class="flex items-center mt-2">
-                    <input type="hidden" name="private" value="0">
-                    <input type="checkbox" name="private" id="edit-private" value="1"
-                        class="text-green-600 focus:ring-green-500 rounded">
-                    <label for="edit-private" class="ml-2 text-sm text-gray-700">Private Event</label>
-                </div>
-
-                <div class="flex justify-end space-x-2">
-                    <button type="submit"
-                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                        Update Event
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" id="cancel-edit-btn"
+                        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                        Cancel
                     </button>
-
-                    <!-- Add Sync to Google button -->
-                    <button type="button" id="sync-to-google-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 hidden">
+                    <button type="button" id="sync-to-google-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors hidden">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2" />
                         </svg>
-                        Sync to Google Calendar
+                        Sync to Google
                     </button>
-
-                    <button type="button" id="cancel-edit-btn" class="ml-2 px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">
-                        Cancel
+                    <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Update Event
                     </button>
                 </div>
             </form>
@@ -533,24 +522,24 @@ window.closeEditModal = function() {
 };
 
 function createEditGuestTag(email) {
-    const container = document.getElementById('edit-guest-container');
-    const input = document.getElementById('edit-guest-input');
+    const guestContainer = document.getElementById('edit-guest-container');
+    const guestInput = document.getElementById('edit-guest-input');
 
     const span = document.createElement("span");
-    span.className = "px-2 py-1 bg-gray-200 rounded text-sm flex items-center";
+    span.className = "px-2 py-1 bg-gray-100 rounded-full text-sm flex items-center group";
     span.textContent = email;
 
     const removeBtn = document.createElement("button");
     removeBtn.innerHTML = "&times;";
-    removeBtn.className = "ml-2 text-red-500 hover:text-red-700";
+    removeBtn.className = "ml-2 text-gray-400 hover:text-red-500 transition-colors";
     removeBtn.onclick = function() {
         editGuests = editGuests.filter(g => g !== email);
         span.remove();
-        document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
+        updateEditHiddenInput();
     };
 
     span.appendChild(removeBtn);
-    container.insertBefore(span, input);
+    guestContainer.insertBefore(span, guestInput);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
