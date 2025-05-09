@@ -44,22 +44,19 @@ class CalendarController extends Controller
         $eventsQuery = Event::with('participants');
 
         if ($isAdmin) {
-            // Admin sees institute and all sector-level events (including all divisions within a sector)
-            $eventsQuery->where(function ($query) {
-                $query->where('calendar_type', 'institute')
-                      ->orWhereIn('calendar_type', ['sector1', 'sector2', 'sector3', 'sector4']);
-            });
-        } else if ($isDivisionHead) {
-            $userSector = explode('_', $user->division)[0];
-            $eventsQuery->where(function($query) use ($user, $userSector) {
-                $query->where('calendar_type', 'institute')
-                      ->orWhere('calendar_type', $userSector)
-                      ->orWhere('calendar_type', $user->division);
-            });
+            // Admin sees all events
+            // No additional where clause needed - they see everything
         } else {
-            $eventsQuery->where(function($query) use ($user) {
-                $query->where('calendar_type', 'institute')
-                      ->orWhere('calendar_type', $user->division);
+            // Get the user's sector from their division (e.g., 'sector1' from 'sector1_div1')
+            $userSector = explode('_', $user->division)[0];
+            
+            $eventsQuery->where(function($query) use ($user, $userSector) {
+                $query->where('calendar_type', 'institute')  // Everyone sees institute events
+                      ->orWhere('calendar_type', $userSector)  // See all events in their sector
+                      ->orWhere('calendar_type', $user->division)  // See their division's events
+                      ->orWhere('calendar_type', 'like', $userSector . '%')  // Handle sector-level events with variations
+                      ->orWhere('calendar_type', 'like', $userSector . '-%')  // Handle "sector1- all division" format
+                      ->orWhere('calendar_type', 'like', $userSector . ' -%');  // Handle "sector1 - all division" format
             });
         }
 
@@ -74,7 +71,7 @@ class CalendarController extends Controller
             'is_all_day as allDay',
             'calendar_type',
             'private',
-            'user_id'  // Make sure user_id is selected
+            'user_id'
         )
         ->get()
         ->map(function ($event) {
@@ -88,7 +85,15 @@ class CalendarController extends Controller
                 'Sector 2' => 'sector2',
                 'Sector 3' => 'sector3',
                 'Sector 4' => 'sector4',
-                'Division 1' => 'sector1_div1', // Default to Sector 1's Division 1
+                'Division 1' => 'sector1_div1',
+                'sector1- all division' => 'sector1',
+                'sector1 - all division' => 'sector1',
+                'sector2- all division' => 'sector2',
+                'sector2 - all division' => 'sector2',
+                'sector3- all division' => 'sector3',
+                'sector3 - all division' => 'sector3',
+                'sector4- all division' => 'sector4',
+                'sector4 - all division' => 'sector4'
             ];
 
             // Get the mapped calendar type or keep original if no mapping exists
@@ -118,7 +123,7 @@ class CalendarController extends Controller
                     'guests' => $event['participants']->pluck('email'),
                     'calendarType' => $mappedCalendarType,
                     'private' => $event['private'],
-                    'user_id' => (int)$event['user_id']  // Cast to integer to ensure type consistency
+                    'user_id' => (int)$event['user_id']
                 ];
             }
 
