@@ -543,6 +543,11 @@ function createEditGuestTag(email) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Add click handler for cancel button
+    document.getElementById('cancel-edit-btn').addEventListener('click', function() {
+        window.closeEditModal();
+    });
+
     const form = document.getElementById('edit-event-form');
     const guestInput = document.getElementById('edit-guest-input');
 
