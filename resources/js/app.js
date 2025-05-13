@@ -141,7 +141,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 source: info.event.extendedProps.source || 'local',
                                 calendarType: info.event.extendedProps.calendarType || 'institute',
                                 editable: info.event.extendedProps.editable !== undefined ?
-                                    info.event.extendedProps.editable : true
+                                    info.event.extendedProps.editable : true,
+                                user_id: info.event.extendedProps.user_id || info.event.user_id || null
                             }
                         };
 
