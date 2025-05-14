@@ -135,6 +135,149 @@
                     </label>
                 </div>
 
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
+                    <div class="relative space-y-2">
+                        @php
+                            $user = auth()->user();
+                            $userUnit = $user->organizationalUnit;
+                            $isAdmin = $user->division === 'institute';
+                            
+                            // Get all organizational units
+                            $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
+                            $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
+                        @endphp
+
+                        <!-- Organizational Units Dropdown -->
+                        <div class="relative">
+                            <button id="editOrganizationalUnitsButton" data-dropdown-toggle="editOrganizationalUnitsDropdown" 
+                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
+                                type="button">
+                                <span id="editSelectedUnitsText">Select organizational units</span>
+                                <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown menu -->
+                            <div id="editOrganizationalUnitsDropdown" class="z-10 hidden w-full bg-white rounded-lg shadow-lg border border-gray-200 mt-1">
+                                <!-- Role-based Permissions Header -->
+                                <div class="p-3 border-b border-gray-200">
+                                    <h3 class="text-sm font-semibold text-gray-900 mb-2">Your Permissions:</h3>
+                                    @if($isAdmin)
+                                        <p class="text-xs text-gray-600">You can create events visible to all organizational units or any combination of sectors and divisions.</p>
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <p class="text-xs text-gray-600">You can create events visible to your entire sector or specific divisions within it.</p>
+                                    @else
+                                        <p class="text-xs text-gray-600">You can only create events visible to your own division.</p>
+                                    @endif
+                                </div>
+
+                                <ul class="p-3 space-y-1 text-sm text-gray-700" aria-labelledby="editOrganizationalUnitsButton">
+                                    <!-- Global Event Option (moved inside dropdown) -->
+                                    <li class="border-b border-gray-200 pb-2 mb-2">
+                                        <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                            <input type="checkbox" name="is_global" id="edit-is_global" value="1" 
+                                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                            <label for="edit-is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                Global Event (Visible to Everyone)
+                                            </label>
+                                        </div>
+                                    </li>
+
+                                    @if($isAdmin)
+                                        <!-- Admin can see all sectors and divisions -->
+                                        @foreach($sectors as $sector)
+                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $sector->id }}"
+                                                        id="edit-sector-{{ $sector->id }}"
+                                                        class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $sector->id }}">
+                                                    <label for="edit-sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                        All Divisions
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
+                                                <li>
+                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                        <input type="checkbox" 
+                                                            name="organizational_unit_ids[]" 
+                                                            value="{{ $division->id }}"
+                                                            id="edit-division-{{ $division->id }}"
+                                                            class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                            data-sector-id="{{ $sector->id }}">
+                                                        <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                            {{ $division->name }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        @endforeach
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <!-- Sector Head can see their sector and its divisions -->
+                                        <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="edit-sector-{{ $userUnit->id }}"
+                                                    class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    data-sector-id="{{ $userUnit->id }}">
+                                                <label for="edit-sector-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                    All Divisions
+                                                </label>
+                                            </div>
+                                        </li>
+                                        @foreach($divisions->where('parent_id', $userUnit->id) as $division)
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $division->id }}"
+                                                        id="edit-division-{{ $division->id }}"
+                                                        class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $userUnit->id }}">
+                                                    <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                        {{ $division->name }}
+                                                    </label>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    @elseif($userUnit)
+                                        <!-- Division Head and Employees can only see their division -->
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="edit-division-{{ $userUnit->id }}"
+                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                                <label for="edit-division-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                    {{ $userUnit->name }}
+                                                </label>
+                                            </div>
+                                        </li>
+                                    @else
+                                        <li class="text-center py-2 text-gray-500">No organizational units available</li>
+                                    @endif
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <strong>Visibility Rules:</strong><br>
+                        • Global: Visible to everyone<br>
+                        • Sector: Events for an entire sector with multiple divisions<br>
+                        • Division: Events that only affect one division
+                    </p>
+                </div>
+
                 <div class="flex justify-end space-x-3 pt-4">
                     <button type="button" id="cancel-edit-btn"
                         class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
@@ -801,6 +944,95 @@ document.addEventListener('DOMContentLoaded', function() {
             window.closeEditModal();
         }
     }, true);
+
+    // Handle global checkbox
+    document.getElementById('edit-is_global').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.disabled = this.checked;
+            if (this.checked) {
+                checkbox.checked = false;
+            }
+        });
+        
+        if (this.checked) {
+            document.getElementById('editSelectedUnitsText').textContent = 'Global Event';
+        } else {
+            updateEditSelectedUnitsText();
+        }
+    });
+
+    // Initialize dropdown functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropdownButton = document.getElementById('editOrganizationalUnitsButton');
+        const dropdown = document.getElementById('editOrganizationalUnitsDropdown');
+        
+        if (!dropdownButton || !dropdown) {
+            console.error('Dropdown elements not found');
+            return;
+        }
+        
+        dropdownButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            dropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+        
+        // Initialize sector checkboxes
+        document.querySelectorAll('.edit-sector-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const sectorId = this.dataset.sectorId;
+                const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
+                
+                divisionCheckboxes.forEach(divCheckbox => {
+                    divCheckbox.checked = this.checked;
+                    divCheckbox.disabled = this.checked;
+                });
+                
+                updateEditSelectedUnitsText();
+            });
+        });
+
+        // Initialize division checkboxes
+        document.querySelectorAll('.edit-division-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const sectorId = this.dataset.sectorId;
+                const sectorCheckbox = document.querySelector(`.edit-sector-checkbox[data-sector-id="${sectorId}"]`);
+                const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
+                
+                if (sectorCheckbox) {
+                    // If all divisions are checked, check the sector
+                    const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
+                    sectorCheckbox.checked = allChecked;
+                }
+                
+                updateEditSelectedUnitsText();
+            });
+        });
+    });
+
+    function updateEditSelectedUnitsText() {
+        const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+        const selectedText = document.getElementById('editSelectedUnitsText');
+        const isGlobal = document.getElementById('edit-is_global').checked;
+        
+        if (isGlobal) {
+            selectedText.textContent = 'Global Event';
+        } else if (selectedCheckboxes.length === 0) {
+            selectedText.textContent = 'Select organizational units';
+        } else if (selectedCheckboxes.length === 1) {
+            selectedText.textContent = selectedCheckboxes[0].nextElementSibling.textContent.trim();
+        } else {
+            selectedText.textContent = `${selectedCheckboxes.length} units selected`;
+        }
+    }
 });
 </script>
 

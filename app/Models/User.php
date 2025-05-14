@@ -20,12 +20,15 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-        'google_calendar_id',
         'password',
         'division',
         'is_division_head',
+        'organizational_unit_id',
+        'google_calendar_id',
         'google_access_token',
         'google_refresh_token',
+        'google_token_expires_at',
+        'selected_calendar_id'
     ];
 
     /**
@@ -73,5 +76,13 @@ class User extends Authenticatable
 
         // Regular users can only create events in their own division
         return $this->division === $calendarType;
+    }
+
+    /**
+     * Get the organizational unit that the user belongs to.
+     */
+    public function organizationalUnit()
+    {
+        return $this->belongsTo(OrganizationalUnit::class);
     }
 }

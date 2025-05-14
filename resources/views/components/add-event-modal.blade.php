@@ -32,42 +32,167 @@
                 </div>
 
                 <div class="space-y-2">
-                    <label for="calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <div class="relative">
-                        <select name="calendar_type" id="calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                            @if(auth()->user()->division === 'institute')
-                                <option value="institute">Institute-wide Calendar (For All Divisions)</option>
-                                <optgroup label="Sector Calendars">
-                                    <option value="sector1">Sector 1 (All Sector 1 Divisions)</option>
-                                    <option value="sector2">Sector 2 (All Sector 2 Divisions)</option>
-                                    <option value="sector3">Sector 3 (All Sector 3 Divisions)</option>
-                                    <option value="sector4">Sector 4 (All Sector 4 Divisions)</option>
-                                </optgroup>
-                                <optgroup label="Division-specific Calendars">
-                                    <option value="sector1_div1">Sector 1 - Division 1 Only</option>
-                                    <option value="sector2_div1">Sector 2 - Division 1 Only</option>
-                                    <option value="sector3_div1">Sector 3 - Division 1 Only</option>
-                                    <option value="sector4_div1">Sector 4 - Division 1 Only</option>
-                                </optgroup>
-                            @elseif(auth()->user()->is_division_head)
-                                @php
-                                    $userDivision = auth()->user()->division;
-                                    $userSector = explode('_', $userDivision)[0];
+                    <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
+                    <div class="relative space-y-2">
+                        @php
+                            $user = auth()->user();
+                            $userUnit = $user->organizationalUnit;
+                            $isAdmin = $user->division === 'institute';
+                            
+                            // Get all organizational units
+                            $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
+                            $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
                                 @endphp
-                                <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
-                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
+
+                        <!-- Organizational Units Dropdown -->
+                        <div class="relative">
+                            <button id="organizationalUnitsButton" data-dropdown-toggle="organizationalUnitsDropdown" 
+                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
+                                type="button">
+                                <span id="selectedUnitsText">Select organizational units</span>
+                                <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown menu -->
+                            <div id="organizationalUnitsDropdown" class="z-10 hidden w-full bg-white rounded-lg shadow-lg border border-gray-200 mt-1">
+                                <!-- Role-based Permissions Header -->
+                                <div class="p-3 border-b border-gray-200">
+                                    <h3 class="text-sm font-semibold text-gray-900 mb-2">Your Permissions:</h3>
+                                    @if($isAdmin)
+                                        <p class="text-xs text-gray-600">You can create events visible to all organizational units or any combination of sectors and divisions.</p>
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <p class="text-xs text-gray-600">You can create events visible to your entire sector or specific divisions within it.</p>
+                                    @else
+                                        <p class="text-xs text-gray-600">You can only create events visible to your own division.</p>
+                                    @endif
+                                </div>
+
+                                <ul class="p-3 space-y-1 text-sm text-gray-700" aria-labelledby="organizationalUnitsButton">
+                                    <!-- Global Event Option (moved inside dropdown) -->
+                                    @if($isAdmin || ($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin'))
+                                    <li class="border-b border-gray-200 pb-2 mb-2">
+                                        <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                            <input type="checkbox" name="is_global" id="is_global" value="1" 
+                                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                            <label for="is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                Global Event (Visible to Everyone)
+                                            </label>
+                                        </div>
+                                    </li>
+                                    @endif
+
+                                    @if($isAdmin)
+                                        <!-- Admin can see all sectors and divisions -->
+                                        @foreach($sectors->where('name', '!=', 'Admin') as $sector)
+                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $sector->id }}"
+                                                        id="sector-{{ $sector->id }}"
+                                                        class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $sector->id }}">
+                                                    <label for="sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                        {{ $sector->name }} (Entire Sector)
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
+                                                <li>
+                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                        <input type="checkbox" 
+                                                            name="organizational_unit_ids[]" 
+                                                            value="{{ $division->id }}"
+                                                            id="division-{{ $division->id }}"
+                                                            class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                            data-sector-id="{{ $sector->id }}">
+                                                        <label for="division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                            {{ $division->name }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        @endforeach
+                                    @elseif($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin')
+                                        <!-- Admin sector head can select from Research and Development sectors -->
+                                        @foreach($sectors->where('name', '!=', 'Admin') as $sector)
+                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $sector->id }}"
+                                                        id="sector-{{ $sector->id }}"
+                                                        class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $sector->id }}">
+                                                    <label for="sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                        {{ $sector->name }} (Entire Sector)
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
+                                                <li>
+                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                        <input type="checkbox" 
+                                                            name="organizational_unit_ids[]" 
+                                                            value="{{ $division->id }}"
+                                                            id="division-{{ $division->id }}"
+                                                            class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                            data-sector-id="{{ $sector->id }}">
+                                                        <label for="division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                            {{ $division->name }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        @endforeach
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <!-- Regular sector heads can see only their sector and its divisions -->
+                                        <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
+                                        @foreach($divisions->where('parent_id', $userUnit->id) as $division)
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $division->id }}"
+                                                        id="division-{{ $division->id }}"
+                                                        class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $userUnit->id }}">
+                                                    <label for="division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                        {{ $division->name }}
+                                                    </label>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    @elseif($userUnit)
+                                        <!-- Division Head and Employees can only see their division -->
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="division-{{ $userUnit->id }}"
+                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                                <label for="division-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                    {{ $userUnit->name }}
+                                                </label>
+                                            </div>
+                                        </li>
                             @else
-                                <option value="{{ auth()->user()->division }}">
-                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
-                                </option>
+                                        <li class="text-center py-2 text-gray-500">No organizational units available</li>
                             @endif
-                        </select>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                     <p class="text-xs text-gray-500 mt-1">
-                        <strong>Calendar Types:</strong><br>
-                        • Institute-wide: Visible to everyone<br>
+                        <strong>Visibility Rules:</strong><br>
+                        • Global: Visible to everyone<br>
                         • Sector: Events for an entire sector with multiple divisions<br>
-                        • Division-specific: Events that only affect one division
+                        • Division: Events that only affect one division
                     </p>
                 </div>
 
@@ -221,6 +346,98 @@
         guestContainer.insertBefore(span, guestInput);
     }
 
+    function updateSelectedUnitsText() {
+        const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+        const selectedText = document.getElementById('selectedUnitsText');
+        const isGlobalCheckbox = document.getElementById('is_global');
+        
+        if (isGlobalCheckbox && isGlobalCheckbox.checked) {
+            selectedText.textContent = 'Global Event';
+        } else if (selectedCheckboxes.length === 0) {
+            selectedText.textContent = 'Select organizational units';
+        } else if (selectedCheckboxes.length === 1) {
+            selectedText.textContent = selectedCheckboxes[0].nextElementSibling.textContent.trim();
+        } else {
+            selectedText.textContent = `${selectedCheckboxes.length} units selected`;
+        }
+    }
+
+    // Initialize dropdown toggle
+    function initializeDropdown() {
+        const dropdownButton = document.getElementById('organizationalUnitsButton');
+        const dropdown = document.getElementById('organizationalUnitsDropdown');
+        
+        if (!dropdownButton || !dropdown) {
+            console.error('Dropdown elements not found');
+            return;
+        }
+        
+        dropdownButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            dropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') && 
+                !dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    // Initialize sector and division checkboxes
+    function initializeCheckboxes() {
+        // Global checkbox
+        const globalCheckbox = document.getElementById('is_global');
+        if (globalCheckbox) {
+            globalCheckbox.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
+                
+                checkboxes.forEach(checkbox => {
+                    checkbox.disabled = this.checked;
+                    if (this.checked) {
+                        checkbox.checked = false;
+                    }
+                });
+                
+                updateSelectedUnitsText();
+            });
+        }
+        
+        // Sector checkboxes
+        document.querySelectorAll('.sector-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const sectorId = this.dataset.sectorId;
+                const divisionCheckboxes = document.querySelectorAll(`.division-checkbox[data-sector-id="${sectorId}"]`);
+                
+                divisionCheckboxes.forEach(divCheckbox => {
+                    divCheckbox.checked = this.checked;
+                    divCheckbox.disabled = this.checked;
+                });
+                
+                updateSelectedUnitsText();
+            });
+        });
+
+        // Division checkboxes
+        document.querySelectorAll('.division-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const sectorId = this.dataset.sectorId;
+                const sectorCheckbox = document.querySelector(`.sector-checkbox[data-sector-id="${sectorId}"]`);
+                const divisionCheckboxes = document.querySelectorAll(`.division-checkbox[data-sector-id="${sectorId}"]`);
+                
+                if (sectorCheckbox) {
+                    // If all divisions are checked, check the sector
+                    const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
+                    sectorCheckbox.checked = allChecked;
+                }
+                
+                updateSelectedUnitsText();
+            });
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
         // Initialize first color option as selected
         const firstColorOption = document.querySelector(".color-option input");
@@ -270,6 +487,10 @@
         if (calendarTypeSelect) {
             calendarTypeSelect.value = userDivision;
         }
+
+        // Initialize dropdowns and checkboxes
+        initializeDropdown();
+        initializeCheckboxes();
     });
 
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {
@@ -297,6 +518,20 @@
                     });
                     return;
                 }
+            }
+
+            // Check if at least one organizational unit is selected or global is checked
+            const isGlobal = document.getElementById('is_global').checked;
+            const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+            
+            if (!isGlobal && selectedUnits.length === 0) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Visibility Required',
+                    text: 'Please select at least one organizational unit or mark as global event',
+                    confirmButtonColor: '#22c55e'
+                });
+                return;
             }
 
             const formData = new FormData(this);
@@ -412,9 +647,10 @@
         }
 
         const modal = document.getElementById('add-event-modal');
-        const modalContent = modal.querySelector('.h-full.bg-white');
+        if (!modal) return;
 
-        if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
+        const modalContent = modal.querySelector('.h-full');
+        if (modal && !modal.classList.contains('translate-x-full') && modalContent && !modalContent.contains(event.target)) {
             closeModal();
         }
     }, true);

@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
@@ -17,16 +14,20 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->string('google_calendar_id')->nullable();
+            $table->foreignId('organizational_unit_id')->nullable()->constrained('organizational_units')->onDelete('set null');
+            $table->boolean('is_division_head')->default(false);
+            $table->string('google_access_token')->nullable();
+            $table->string('google_refresh_token')->nullable();
+            $table->timestamp('google_token_expires_at')->nullable();
+            $table->string('selected_calendar_id')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');
     }
-};
+}; 

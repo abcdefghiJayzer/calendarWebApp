@@ -10,139 +10,73 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Institute admin
+        // Delete all rows to avoid duplicates (no truncate due to FK constraints)
+        DB::table('users')->delete();
+
+        // Create admin user
         DB::table('users')->insert([
-            'name' => 'Institute Admin',
+            'name' => 'Admin User',
             'email' => 'admin@example.com',
             'password' => Hash::make('password'),
-            'division' => 'institute',
+            'organizational_unit_id' => null,
             'is_division_head' => false,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        // SECTOR 1
-        DB::table('users')->insert([
-            'name' => 'Sector 1 Head',
-            'email' => 'sector1@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector1',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Create sector heads
+        $sectors = DB::table('organizational_units')
+            ->where('type', 'sector')
+            ->get();
 
-        DB::table('users')->insert([
-            'name' => 'Sector 1 Division 1 Head',
-            'email' => 'sector1div1head@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector1_div1',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        foreach ($sectors as $sector) {
+            $emailPrefix = strtolower(str_replace(' ', '', $sector->name));
+            // Special case for admin sector head
+            $email = $sector->name === 'Admin' ? 'adminsector.head@example.com' : $emailPrefix . '.sector.head@example.com';
+            DB::table('users')->insert([
+                'name' => "{$sector->name} Sector Head",
+                'email' => $email,
+                'password' => Hash::make('password'),
+                'organizational_unit_id' => $sector->id,
+                'is_division_head' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
-        DB::table('users')->insert([
-            'name' => 'Sector 1 Division 1 Member',
-            'email' => 'sector1div1@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector1_div1',
-            'is_division_head' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Create division heads and employees for Research and Development sectors
+        $divisions = DB::table('organizational_units as divisions')
+            ->join('organizational_units as sectors', 'divisions.parent_id', '=', 'sectors.id')
+            ->where('divisions.type', 'division')
+            ->where('sectors.name', '!=', 'Admin')
+            ->select('divisions.*', 'sectors.name as sector_name')
+            ->get();
 
-        // SECTOR 2
-        DB::table('users')->insert([
-            'name' => 'Sector 2 Head',
-            'email' => 'sector2@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector2',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        foreach ($divisions as $division) {
+            $sectorName = strtolower($division->sector_name);
+            $divisionName = strtolower(str_replace(' ', '', $division->name));
+            
+            // Create division head
+            DB::table('users')->insert([
+                'name' => "{$division->sector_name} {$division->name} Head",
+                'email' => "{$sectorName}.{$divisionName}.head@example.com",
+                'password' => Hash::make('password'),
+                'organizational_unit_id' => $division->id,
+                'is_division_head' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        DB::table('users')->insert([
-            'name' => 'Sector 2 Division 1 Head',
-            'email' => 'sector2div1head@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector2_div1',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('users')->insert([
-            'name' => 'Sector 2 Division 1 Member',
-            'email' => 'sector2div1@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector2_div1',
-            'is_division_head' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // SECTOR 3
-        DB::table('users')->insert([
-            'name' => 'Sector 3 Head',
-            'email' => 'sector3@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector3',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('users')->insert([
-            'name' => 'Sector 3 Division 1 Head',
-            'email' => 'sector3div1head@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector3_div1',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('users')->insert([
-            'name' => 'Sector 3 Division 1 Member',
-            'email' => 'sector3div1@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector3_div1',
-            'is_division_head' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // SECTOR 4
-        DB::table('users')->insert([
-            'name' => 'Sector 4 Head',
-            'email' => 'sector4@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector4',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('users')->insert([
-            'name' => 'Sector 4 Division 1 Head',
-            'email' => 'sector4div1head@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector4_div1',
-            'is_division_head' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('users')->insert([
-            'name' => 'Sector 4 Division 1 Member',
-            'email' => 'sector4div1@example.com',
-            'password' => Hash::make('password'),
-            'division' => 'sector4_div1',
-            'is_division_head' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            // Create one employee for each division
+            DB::table('users')->insert([
+                'name' => "{$division->sector_name} {$division->name} Employee",
+                'email' => "{$sectorName}.{$divisionName}.employee@example.com",
+                'password' => Hash::make('password'),
+                'organizational_unit_id' => $division->id,
+                'is_division_head' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 }
