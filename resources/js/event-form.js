@@ -33,18 +33,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Network response was not ok');
-                }
-
                 const result = await response.json();
 
-                if (result.success) {
+                if (response.ok) {
                     closeModal();
                     if (window.calendar) {
                         window.calendar.refetchEvents();
@@ -53,9 +50,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'success',
                         title: 'Success',
-                        text: 'Event created successfully!',
+                        text: result.message || 'Event created successfully!',
                         confirmButtonColor: '#22c55e'
                     });
+                } else {
+                    throw new Error(result.message || result.error || 'Failed to create event');
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -86,18 +85,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'PUT',
                     body: formData,
                     headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Network response was not ok');
-                }
-
                 const result = await response.json();
 
-                if (result.success) {
+                if (response.ok) {
                     closeEditModal();
                     if (window.calendar) {
                         window.calendar.refetchEvents();
@@ -106,9 +102,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'success',
                         title: 'Success',
-                        text: 'Event updated successfully!',
+                        text: result.message || 'Event updated successfully!',
                         confirmButtonColor: '#22c55e'
                     });
+                } else {
+                    throw new Error(result.message || result.error || 'Failed to update event');
                 }
             } catch (error) {
                 console.error('Error:', error);

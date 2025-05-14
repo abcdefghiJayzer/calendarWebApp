@@ -450,6 +450,9 @@ class GoogleCalendarService
             '#eab308' => '5', // Yellow
             '#22c55e' => '2', // Green
             '#000000' => '8', // Black/Gray
+            '#616161' => '8', // Graphite (Division Employee)
+            '#e8b4bc' => '4', // Flamingo/Lavender (Research/Development Sector Head & Division Head)
+            '#9caf88' => '2', // Sage (Admin Sector Head)
         ];
 
         return $colorMap[$hexColor] ?? '1'; // Default to blue (1) if no match

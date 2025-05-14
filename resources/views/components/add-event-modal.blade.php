@@ -12,24 +12,30 @@
 
             <form id="add-event-form" action="{{ route('events.store') }}" method="POST" class="space-y-5">
                 @csrf
+                @php
+                    // Define color variables
+                    $divisionEmployeeColor = '#616161';
+                    $adminColor = '#2563eb'; // blue-600
+                    $sectorHeadColor = '#059669'; // emerald-600
+                    $divisionHeadColor = '#7c3aed'; // violet-600
+                    
+                    // Determine user type and set appropriate color
+                    $user = auth()->user();
+                    $userUnit = $user->organizationalUnit;
+                    $isAdmin = $user->is_admin;
+                    $isSectorHead = $userUnit && $userUnit->type === 'sector';
+                    $isDivisionHead = $userUnit && $userUnit->type === 'division' && $user->is_division_head;
+                    $isDivisionEmployee = $userUnit && $userUnit->type === 'division' && !$user->is_division_head;
+                    
+                    // Set default color based on user type
+                    $defaultColor = $isAdmin ? $adminColor : 
+                                  ($isSectorHead ? $sectorHeadColor : 
+                                  ($isDivisionHead ? $divisionHeadColor : 
+                                  ($isDivisionEmployee ? $divisionEmployeeColor : $adminColor)));
+                @endphp
 
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
-                    <div class="flex space-x-3">
-                        @foreach([
-                        '#3b82f6' => 'bg-blue-500',
-                        '#ef4444' => 'bg-red-500',
-                        '#eab308' => 'bg-yellow-500',
-                        '#22c55e' => 'bg-green-500',
-                        '#000000' => 'bg-black'
-                        ] as $hex => $bg)
-                        <label class="cursor-pointer color-option rounded-full group" data-color="{{ $hex }}">
-                            <input type="radio" name="color" value="{{ $hex }}" {{ $hex === '#3b82f6' ? 'checked' : '' }} class="hidden">
-                            <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} transition-all duration-200 group-hover:scale-110 {{ $hex === '#3b82f6' ? 'ring-4 ring-offset-2 ring-blue-300' : '' }}"></div>
-                        </label>
-                        @endforeach
-                    </div>
-                </div>
+                <!-- Hidden color input -->
+                <input type="hidden" name="color" id="event-color" value="{{ $defaultColor }}">
 
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
@@ -42,7 +48,7 @@
                             // Get all organizational units
                             $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
                             $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
-                                @endphp
+                        @endphp
 
                         <!-- Organizational Units Dropdown -->
                         <div class="relative">
@@ -70,7 +76,7 @@
                                 </div>
 
                                 <ul class="p-3 space-y-1 text-sm text-gray-700" aria-labelledby="organizationalUnitsButton">
-                                    <!-- Global Event Option (moved inside dropdown) -->
+                                    <!-- Global Event Option -->
                                     @if($isAdmin || ($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin'))
                                     <li class="border-b border-gray-200 pb-2 mb-2">
                                         <div class="flex items-center p-2 rounded hover:bg-gray-50">
@@ -152,6 +158,19 @@
                                     @elseif($userUnit && $userUnit->type === 'sector')
                                         <!-- Regular sector heads can see only their sector and its divisions -->
                                         <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="sector-{{ $userUnit->id }}"
+                                                    class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    data-sector-id="{{ $userUnit->id }}">
+                                                <label for="sector-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                    {{ $userUnit->name }} (Entire Sector)
+                                                </label>
+                                            </div>
+                                        </li>
                                         @foreach($divisions->where('parent_id', $userUnit->id) as $division)
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
@@ -175,15 +194,17 @@
                                                     name="organizational_unit_ids[]" 
                                                     value="{{ $userUnit->id }}"
                                                     id="division-{{ $userUnit->id }}"
-                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    checked
+                                                    disabled>
                                                 <label for="division-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
                                                     {{ $userUnit->name }}
                                                 </label>
                                             </div>
                                         </li>
-                            @else
+                                    @else
                                         <li class="text-center py-2 text-gray-500">No organizational units available</li>
-                            @endif
+                                    @endif
                                 </ul>
                             </div>
                         </div>
@@ -198,7 +219,7 @@
 
                 <div class="space-y-2">
                     <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-                    <input type="text" name="title" id="title" required 
+                    <input type="text" name="title" id="title" required
                         class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
@@ -268,12 +289,40 @@
 </div>
 
 <script>
+    // Add color variables to JavaScript
+    const COLORS = {
+        divisionEmployee: '#616161',
+        admin: '#2563eb',
+        sectorHead: '#059669',
+        divisionHead: '#7c3aed'
+    };
+
     let guests = [];
 
     function openModal(startDate = null, endDate = null) {
         const modal = document.getElementById('add-event-modal');
         modal.classList.remove('translate-x-full');
         document.getElementById('calendar-container').classList.add('mr-120');
+
+        // Set the color based on user type
+        const userUnit = "{{ auth()->user()->organizationalUnit->type ?? '' }}";
+        const isDivisionEmployee = userUnit === 'division' && !{{ auth()->user()->is_division_head ? 'true' : 'false' }};
+        const isDivisionHead = userUnit === 'division' && {{ auth()->user()->is_division_head ? 'true' : 'false' }};
+        const isSectorHead = userUnit === 'sector';
+        const isAdmin = {{ auth()->user()->is_admin ? 'true' : 'false' }};
+
+        let color = COLORS.admin; // default color
+        if (isDivisionEmployee) {
+            color = COLORS.divisionEmployee;
+        } else if (isDivisionHead) {
+            color = COLORS.divisionHead;
+        } else if (isSectorHead) {
+            color = COLORS.sectorHead;
+        } else if (isAdmin) {
+            color = COLORS.admin;
+        }
+
+        document.getElementById('event-color').value = color;
 
         if (startDate) {
             const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
@@ -347,7 +396,7 @@
     }
 
     function updateSelectedUnitsText() {
-        const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+        const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked:not(:disabled)');
         const selectedText = document.getElementById('selectedUnitsText');
         const isGlobalCheckbox = document.getElementById('is_global');
         
@@ -439,53 +488,10 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
-        // Initialize first color option as selected
-        const firstColorOption = document.querySelector(".color-option input");
-        if (firstColorOption) {
-            firstColorOption.checked = true;
-            firstColorOption.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
-        }
-
-        const colorOptions = document.querySelectorAll(".color-option input");
-        const guestInput = document.getElementById("guest-input");
-
-        colorOptions.forEach(option => {
-            option.addEventListener("change", function() {
-                document.querySelectorAll(".color-option").forEach(el => {
-                    el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
-                });
-                this.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
-            });
-        });
-
-        guestInput.addEventListener("keydown", function(event) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                const email = guestInput.value.trim();
-                if (email !== "") {
-                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    if (emailRegex.test(email)) {
-                        if (!guests.includes(email)) {
-                            guests.push(email);
-                            createGuestTag(email);
-                            updateHiddenInput();
-                        }
-                        guestInput.value = "";
-                        guestInput.classList.remove('border-red-500');
-                    } else {
-                        guestInput.classList.add('border-red-500');
-                        alert('Please enter a valid email address');
-                    }
-                }
-            }
-        });
-
-        // Initialize calendar type based on user's division
-        const userDivision = "{{ auth()->user()->division }}";
-        const calendarTypeSelect = document.getElementById('calendar_type');
-
-        if (calendarTypeSelect) {
-            calendarTypeSelect.value = userDivision;
+        // Automatically select organizational unit for employees and division heads
+        const userUnit = document.querySelector('input[name="organizational_unit_ids[]"]');
+        if (userUnit && userUnit.checked) {
+            updateSelectedUnitsText();
         }
 
         // Initialize dropdowns and checkboxes
@@ -521,20 +527,28 @@
             }
 
             // Check if at least one organizational unit is selected or global is checked
-            const isGlobal = document.getElementById('is_global').checked;
+            const isGlobal = document.getElementById('is_global') ? document.getElementById('is_global').checked : false;
             const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
             
             if (!isGlobal && selectedUnits.length === 0) {
                 await Swal.fire({
                     icon: 'error',
-                    title: 'Visibility Required',
-                    text: 'Please select at least one organizational unit or mark as global event',
+                    title: 'Selection Required',
+                    text: 'Please select at least one organizational unit or mark the event as global',
                     confirmButtonColor: '#22c55e'
                 });
                 return;
             }
 
             const formData = new FormData(this);
+            formData.set('is_global', isGlobal ? '1' : '0');  // Explicitly set is_global as string '1' or '0'
+
+            // Add selected organizational units
+            if (!isGlobal && selectedUnits.length > 0) {
+                selectedUnits.forEach(unit => {
+                    formData.append('organizational_unit_ids[]', unit.value);
+                });
+            }
 
             // Check for guest scheduling conflicts
             if (guests.length > 0) {
@@ -593,48 +607,41 @@
             }
 
             // Proceed with event creation
-            const response = await fetch(this.getAttribute('action'), {
+            const response = await fetch(`${window.baseUrl}/events`, {
                 method: 'POST',
                 body: formData,
                 headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                     'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             });
 
-            let responseData;
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                responseData = await response.json();
-            } else {
-                // Handle non-JSON response
-                responseData = {
-                    success: response.ok,
-                    message: response.ok ? 'Event created successfully!' : 'Failed to create event'
-                };
-            }
+            const result = await response.json();
 
             if (response.ok) {
-                await Swal.fire({
+                closeModal();
+                if (window.calendar) {
+                    window.calendar.refetchEvents();
+                }
+
+                Swal.fire({
                     icon: 'success',
                     title: 'Success',
-                    text: responseData.message || 'Event created successfully!',
+                    text: result.message || 'Event created successfully!',
                     confirmButtonColor: '#22c55e'
                 });
-
-                closeModal();
-                window.location.reload();
             } else {
-                throw new Error(responseData.message || 'Failed to create event');
+                throw new Error(result.message || result.error || 'Failed to create event');
             }
 
         } catch (error) {
             console.error('Error:', error);
-            await Swal.fire({
+
+            Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'An error occurred while creating the event',
+                text: error.message || 'There was a problem creating the event',
                 confirmButtonColor: '#22c55e'
             });
         }

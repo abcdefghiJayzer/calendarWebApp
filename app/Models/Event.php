@@ -19,8 +19,8 @@ class Event extends Model
         'is_all_day',
         'color',
         'status',
-        'calendar_type',
-        'private',  // Add this line
+        'visibility',
+        'private',
         'google_event_id'
     ];
 
@@ -29,5 +29,13 @@ class Event extends Model
     {
         return $this->belongsToMany(EventGuest::class, 'event_participants', 'event_id', 'guest_id')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the organizational units associated with this event.
+     */
+    public function organizationalUnits()
+    {
+        return $this->belongsToMany(OrganizationalUnit::class, 'event_organizational_unit');
     }
 }

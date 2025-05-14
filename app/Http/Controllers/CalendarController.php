@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Event;
 use App\Models\EventGuest;
 use App\Services\GoogleCalendarService;
+use App\Models\User;
 
 class CalendarController extends Controller
 {
@@ -36,121 +37,174 @@ class CalendarController extends Controller
 
     public function getEvents()
     {
-        $user = auth()->user();
-        $isAdmin = $user->division === 'institute';
-        $isDivisionHead = $user->is_division_head;
+        try {
+            $user = auth()->user();
+            if (!$user) {
+                \Log::error('User not authenticated when fetching events');
+                return response()->json(['error' => 'User not authenticated'], 401);
+            }
 
-        // Start with a base query
-        $eventsQuery = Event::with('participants');
+            \Log::info('Fetching events for user', [
+                'user_id' => $user->id,
+                'division' => $user->division,
+                'org_unit_id' => $user->organizational_unit_id
+            ]);
 
-        if ($isAdmin) {
-            // Admin sees all events
-            // No additional where clause needed - they see everything
-        } else {
-            // Get the user's sector from their division (e.g., 'sector1' from 'sector1_div1')
-            $userSector = explode('_', $user->division)[0];
-            
-            $eventsQuery->where(function($query) use ($user, $userSector) {
-                $query->where('calendar_type', 'institute')  // Everyone sees institute events
-                      ->orWhere('calendar_type', $userSector)  // See all events in their sector
-                      ->orWhere('calendar_type', $user->division)  // See their division's events
-                      ->orWhere('calendar_type', 'like', $userSector . '%')  // Handle sector-level events with variations
-                      ->orWhere('calendar_type', 'like', $userSector . '-%')  // Handle "sector1- all division" format
-                      ->orWhere('calendar_type', 'like', $userSector . ' -%');  // Handle "sector1 - all division" format
+            $userOrganizationalUnitId = $user->organizational_unit_id;
+
+            // Start with a base query
+            $eventsQuery = Event::with(['participants', 'organizationalUnits']);
+
+            // Show events that are either:
+            // 1. Created by the user
+            // 2. Associated with the user's organizational unit
+            // 3. Global events
+            $eventsQuery->where(function($query) use ($user, $userOrganizationalUnitId) {
+                $query->where('user_id', $user->id)
+                    ->orWhere(function($q) use ($user, $userOrganizationalUnitId) {
+                        // Institute users can see all events
+                        if ($user->division === 'institute') {
+                            return;
+                        }
+
+                        // Get user's organizational unit and its parent
+                        $userUnit = $user->organizationalUnit;
+                        $parentUnitId = $userUnit ? $userUnit->parent_id : null;
+
+                        // Show events that are:
+                        // 1. Global (institute-wide)
+                        // 2. Visible to the user's organizational unit
+                        // 3. Visible to the user's parent sector (if user is in a division)
+                        // 4. Visible to any organizational unit the user belongs to
+                        $q->where('visibility', 'institute')
+                          ->orWhere('visibility', $userOrganizationalUnitId)
+                          ->orWhere(function($subQuery) use ($parentUnitId) {
+                              if ($parentUnitId) {
+                                  $subQuery->where('visibility', $parentUnitId);
+                              }
+                          })
+                          ->orWhereHas('organizationalUnits', function($subQuery) use ($userOrganizationalUnitId, $parentUnitId) {
+                              $subQuery->where('organizational_units.id', $userOrganizationalUnitId)
+                                     ->orWhere('organizational_units.id', $parentUnitId);
+                          });
+                    });
             });
-        }
 
-        $events = $eventsQuery->select(
-            'id',
-            'title',
-            'start_date as start',
-            'end_date as end',
-            'location',
-            'color as backgroundColor',
-            'description',
-            'is_all_day as allDay',
-            'calendar_type',
-            'private',
-            'user_id'
-        )
-        ->get()
-        ->map(function ($event) {
-            $data = $event->toArray();
+            $events = $eventsQuery->select(
+                'id',
+                'title',
+                'start_date as start',
+                'end_date as end',
+                'location',
+                'color as backgroundColor',
+                'description',
+                'is_all_day as allDay',
+                'private',
+                'user_id',
+                'visibility'
+            )->get();
 
-            // Map database calendar_type values to filter values
-            $calendarTypeMap = [
-                'Institute Level' => 'institute',
-                'Sectoral' => 'sectoral',
-                'Sector 1' => 'sector1',
-                'Sector 2' => 'sector2',
-                'Sector 3' => 'sector3',
-                'Sector 4' => 'sector4',
-                'Division 1' => 'sector1_div1',
-                'sector1- all division' => 'sector1',
-                'sector1 - all division' => 'sector1',
-                'sector2- all division' => 'sector2',
-                'sector2 - all division' => 'sector2',
-                'sector3- all division' => 'sector3',
-                'sector3 - all division' => 'sector3',
-                'sector4- all division' => 'sector4',
-                'sector4 - all division' => 'sector4'
-            ];
+            \Log::info('Found events', ['count' => $events->count()]);
 
-            // Get the mapped calendar type or keep original if no mapping exists
-            $mappedCalendarType = $calendarTypeMap[$event['calendar_type']] ?? $event['calendar_type'];
+            $events = $events->map(function ($event) use ($user) {
+                try {
+                    $data = $event->toArray();
+                    if (isset($data['user_id'])) {
+                        $data['user_id'] = (int)$data['user_id'];
+                    }
+                    
+                    // Get creator's role
+                    $creator = User::find($data['user_id']);
+                    $creatorRole = 'employee';
+                    if ($creator) {
+                        if ($creator->division === 'institute') {
+                            $creatorRole = 'admin';
+                        } else if ($creator->is_division_head) {
+                            $creatorRole = 'division_head';
+                        } else if ($creator->organizationalUnit && $creator->organizationalUnit->type === 'sector') {
+                            $creatorRole = 'sectoral';
+                        } else {
+                            $creatorRole = 'employee';
+                        }
+                    }
+                    
+                    // Hide details if event is private and user is not the owner
+                    if ($data['private'] && $data['user_id'] !== $user->id) {
+                        $data['title'] = 'Private Event';
+                        $data['backgroundColor'] = '#808080'; // Grey color for private events
+                        $data['extendedProps'] = [
+                            'description' => 'Private event - Details hidden',
+                            'location' => null,
+                            'guests' => [],
+                            'private' => true,
+                            'user_id' => $data['user_id'],
+                            'creator_role' => $creatorRole
+                        ];
+                    } else {
+                        $data['extendedProps'] = [
+                            'description' => $data['description'],
+                            'location' => $data['location'],
+                            'guests' => $event->participants->pluck('email'),
+                            'private' => $data['private'],
+                            'user_id' => (int)$data['user_id'],
+                            'organizational_unit_ids' => $event->organizationalUnits->pluck('id')->toArray(),
+                            'organizational_unit_names' => $event->organizationalUnits->pluck('name')->toArray(),
+                            'visibility' => $data['visibility'],
+                            'is_global' => $data['visibility'] === 'institute',
+                            'visible_to_organizational_units' => $event->organizationalUnits->pluck('id')->toArray(),
+                            'creator_role' => $creatorRole
+                        ];
+                    }
+                    return $data;
+                } catch (\Exception $e) {
+                    \Log::error('Error processing event', [
+                        'event_id' => $event->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return null;
+                }
+            })->filter();
 
-            // Ensure user_id is consistently passed as a number
-            if (isset($data['user_id'])) {
-                $data['user_id'] = (int)$data['user_id'];
+            // Get Google Calendar events and combine with local events (if needed)
+            $googleEvents = $this->getGoogleEvents();
+            if (!empty($googleEvents)) {
+                $events = $events->concat($googleEvents);
             }
 
-            // Hide details if event is private and user is not the owner
-            if ($event['private'] && $event['user_id'] !== auth()->id()) {
-                $data['title'] = 'Private Event';
-                $data['backgroundColor'] = '#808080'; // Grey color for private events
-                $data['extendedProps'] = [
-                    'description' => 'Private event - Details hidden',
-                    'location' => null,
-                    'guests' => [],
-                    'calendarType' => $mappedCalendarType,
-                    'private' => true,
-                    'user_id' => $event['user_id']
-                ];
-            } else {
-                $data['extendedProps'] = [
-                    'description' => $event['description'],
-                    'location' => $event['location'],
-                    'guests' => $event['participants']->pluck('email'),
-                    'calendarType' => $mappedCalendarType,
-                    'private' => $event['private'],
-                    'user_id' => (int)$event['user_id']
-                ];
-            }
-
-            return $data;
-        });
-
-        // Get Google Calendar events and combine with local events
-        $googleEvents = $this->getGoogleEvents();
-
-        // Log both events for debugging
-        \Log::info('Local events count: ' . count($events));
-        \Log::info('Google events count: ' . count($googleEvents));
-
-        // Merge arrays
-        if (!empty($googleEvents)) {
-            $events = $events->concat($googleEvents);
+            return response()->json($events);
+        } catch (\Exception $e) {
+            \Log::error('Error fetching events: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->id()
+            ]);
+            return response()->json(['error' => 'Failed to fetch events: ' . $e->getMessage()], 500);
         }
-
-        return response()->json($events);
     }
 
     public function show($id)
     {
-        $event = Event::with('participants')->find($id);
+        $event = Event::with(['participants', 'organizationalUnits'])->find($id);
 
         if (!$event) {
             return response()->json(['error' => 'Event not found'], 404);
+        }
+
+        // Check if the event is global (no specific visibility)
+        $isGlobal = $event->organizationalUnits->isEmpty();
+        $organizationalUnitIds = $event->organizationalUnits->pluck('id')->toArray();
+        $organizationalUnitNames = $event->organizationalUnits->pluck('name')->toArray();
+
+        // Get creator's role
+        $creator = User::find($event->user_id);
+        $creatorRole = 'employee';
+        if ($creator) {
+            if ($creator->division === 'institute') {
+                $creatorRole = 'admin';
+            } else if ($creator->is_division_head) {
+                $creatorRole = 'division_head';
+            } else if ($creator->organizationalUnit && $creator->organizationalUnit->type === 'sector') {
+                $creatorRole = 'sectoral';
+            }
         }
 
         return response()->json([
@@ -162,17 +216,22 @@ class CalendarController extends Controller
             'backgroundColor' => $event->color,
             'description' => $event->description,
             'location' => $event->location,
-            'calendar_type' => $event->calendar_type,
             'private' => $event->private,
             'user_id' => $event->user_id,
             'guests' => $event->participants->pluck('email'),
+            'is_global' => $event->visibility === 'institute',
+            'organizational_unit_ids' => $organizationalUnitIds,
             'extendedProps' => [
                 'description' => $event->description,
                 'location' => $event->location,
                 'guests' => $event->participants->pluck('email'),
-                'calendar_type' => $event->calendar_type,
                 'private' => $event->private,
-                'user_id' => $event->user_id
+                'user_id' => $event->user_id,
+                'is_global' => $event->visibility === 'institute',
+                'organizational_unit_ids' => $organizationalUnitIds,
+                'organizational_unit_names' => $organizationalUnitNames,
+                'visibility' => $event->visibility,
+                'creator_role' => $creatorRole
             ]
         ]);
     }
@@ -193,36 +252,71 @@ class CalendarController extends Controller
                 'start_date' => 'required|date',
                 'end_date' => 'nullable|date|after_or_equal:start_date',
                 'location' => 'nullable|string',
-                'color' => 'required|string',
                 'guests' => 'nullable|string', // JSON string of guest emails
                 'is_all_day' => 'nullable|boolean',
-                'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
+                'is_global' => 'nullable|boolean',
+                'organizational_unit_ids' => 'nullable|array',
+                'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
 
-            // Check if the user has permission to create events in this division
-            $user = auth()->user();
-            $calendarType = $request->calendar_type;
+            // Set end_date to start_date if not provided
+            $endDate = $request->end_date ?: $request->start_date;
 
-            if (!$user->canCreateEventsIn($calendarType)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'You do not have permission to create events in this division.'
-                ], 403);
+            // Determine visibility based on settings
+            $visibility = 'institute'; // Default to institute-wide
+            $organizationalUnitIds = [];
+
+            if ($request->boolean('is_global')) {
+                $visibility = 'institute'; // Global events are institute-wide
+                $organizationalUnitIds = []; // No organizational units for global events
+            } else {
+                $user = auth()->user();
+                
+                // For division heads and employees, automatically use their organizational unit
+                if ($user->division !== 'institute') {
+                    if ($user->organizational_unit_id) {
+                        $visibility = $user->organizational_unit_id;
+                        $organizationalUnitIds = [$user->organizational_unit_id];
+                    }
+                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                    // Only institute users can select organizational units
+                    $visibility = $request->organizational_unit_ids[0];
+                    $organizationalUnitIds = $request->organizational_unit_ids;
+                }
             }
 
+            // Get the authenticated user
+            $user = auth()->user();
+
+            // Create the event with default color
             $event = Event::create([
                 'title' => $request->title,
                 'description' => $request->description,
                 'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
+                'end_date' => $endDate,
                 'location' => $request->location,
                 'user_id' => auth()->id(),
                 'is_all_day' => $request->is_all_day ?? false,
                 'status' => $request->status ?? 'pending',
-                'color' => $request->color,
-                'calendar_type' => $calendarType,
+                'color' => $user->division === 'institute' ? '#9caf88' : // Sage for admin sector head
+                          ($user->is_division_head ? '#e8b4bc' : // Lavender for division head
+                          ($user->organizationalUnit && $user->organizationalUnit->type === 'sector' &&
+                            (stripos($user->organizationalUnit->name, 'Research') !== false || stripos($user->organizationalUnit->name, 'Development') !== false)
+                            ? '#e8b4bc' // Flamingo for research/development sector head
+                            : ($user->organizationalUnit && $user->organizationalUnit->type === 'sector' ? '#9caf88' : // Sage for other sector heads
+                          ($user->organizationalUnit && $user->organizationalUnit->type === 'division' && !$user->is_division_head ? '#616161' : '#3b82f6')))), // Graphite for division employee
                 'private' => $request->boolean('private'),
+                'visibility' => $visibility,
             ]);
+
+            // Handle organizational units
+            if ($request->boolean('is_global')) {
+                // For global events, don't associate with any specific unit
+                $event->organizationalUnits()->detach();
+            } else if (!empty($organizationalUnitIds)) {
+                // Associate with selected or automatically determined organizational units
+                $event->organizationalUnits()->sync($organizationalUnitIds);
+            }
 
             // Handle guests
             $guestEmails = json_decode($request->guests, true) ?? [];
@@ -235,7 +329,11 @@ class CalendarController extends Controller
             }
 
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => true, 'message' => 'Event created successfully']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Event created successfully',
+                    'event' => $event->load('organizationalUnits')
+                ]);
             }
 
             return redirect()->route('home')->with('success', 'Event created successfully!');
@@ -243,7 +341,10 @@ class CalendarController extends Controller
             \Log::error('Event creation error: ' . $e->getMessage());
 
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ], 500);
             }
 
             return redirect()->back()->with('error', 'Failed to create event: ' . $e->getMessage());
@@ -255,7 +356,7 @@ class CalendarController extends Controller
         $event = Event::findOrFail($id);
 
         // Admin can edit any event
-        if (auth()->user()->division !== 'institute' && !auth()->user()->canCreateEventsIn($event->calendar_type)) {
+        if (auth()->user()->division !== 'institute' && !auth()->user()->canCreateEventsIn($event->visibility)) {
             return redirect()->route('home')->with('error', 'You do not have permission to edit this event.');
         }
 
@@ -267,7 +368,7 @@ class CalendarController extends Controller
         try {
             $event = Event::findOrFail($id);
 
-            // Admin can update any event
+            // Check ownership
             if (auth()->user()->division !== 'institute' && auth()->id() !== $event->user_id) {
                 return response()->json([
                     'success' => false,
@@ -275,42 +376,67 @@ class CalendarController extends Controller
                 ], 403);
             }
 
-            // Existing division permission check
-            if (!auth()->user()->canCreateEventsIn($event->calendar_type) &&
-                !auth()->user()->canCreateEventsIn($request->calendar_type)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'You do not have permission to edit this event or change to this division.'
-                ], 403);
-            }
-
             $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string',
                 'start_date' => 'required|date',
-                'end_date' => 'required|date|after_or_equal:start_date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
                 'guests' => 'nullable|json',
                 'location' => 'nullable|string|max:255',
-                'color' => 'required|string|max:20',
                 'is_all_day' => 'boolean',
-                'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
+                'is_global' => 'nullable|boolean',
+                'organizational_unit_ids' => 'nullable|array',
+                'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
 
-            // Properly handle the is_all_day checkbox (might come as "0", "1", true, false, or not be present)
+            // Properly handle the is_all_day checkbox
             $isAllDay = filter_var($request->input('is_all_day', false), FILTER_VALIDATE_BOOLEAN);
+            
+            // Set end_date to start_date if not provided
+            $endDate = $request->end_date ?: $request->start_date;
+
+            // Determine visibility based on settings
+            $visibility = 'institute'; // Default to institute-wide
+            $organizationalUnitIds = [];
+
+            if ($request->boolean('is_global')) {
+                $visibility = 'institute'; // Global events are institute-wide
+            } else {
+                $user = auth()->user();
+                
+                // For division heads and employees, automatically use their organizational unit
+                if ($user->division !== 'institute') {
+                    if ($user->organizational_unit_id) {
+                        $visibility = $user->organizational_unit_id;
+                        $organizationalUnitIds = [$user->organizational_unit_id];
+                    }
+                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                    // Only institute users can select organizational units
+                    $visibility = $request->organizational_unit_ids[0];
+                    $organizationalUnitIds = $request->organizational_unit_ids;
+                }
+            }
 
             // Update event details
             $event->update([
                 'title' => $request->title,
                 'description' => $request->description,
                 'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
+                'end_date' => $endDate,
                 'location' => $request->location,
-                'color' => $request->color,
                 'is_all_day' => $isAllDay,
-                'calendar_type' => $request->calendar_type,
                 'private' => $request->boolean('private'),
+                'visibility' => $visibility,
             ]);
+
+            // Handle organizational units
+            if ($request->boolean('is_global')) {
+                // For global events, detach all organizational units
+                $event->organizationalUnits()->detach();
+            } else if (!empty($organizationalUnitIds)) {
+                // Sync with selected organizational units
+                $event->organizationalUnits()->sync($organizationalUnitIds);
+            }
 
             // Handle guests update
             $guestEmails = json_decode($request->guests, true) ?? [];
@@ -478,13 +604,24 @@ class CalendarController extends Controller
                 'location' => 'nullable|string',
                 'color' => 'nullable|string',
                 'guests' => 'nullable|string',
+                'is_global' => 'nullable|boolean',
+                'organizational_unit_ids' => 'nullable|array',
+                'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
 
-            // Add validation for calendar_type if it's present
-            if ($request->has('calendar_type')) {
-                $request->validate([
-                    'calendar_type' => 'required|in:institute,sector1,sector1_div1,sector2,sector2_div1,sector3,sector3_div1,sector4,sector4_div1',
-                ]);
+            // Determine visibility based on settings
+            $visibility = 'institute'; // Default to institute-wide
+            if ($request->boolean('is_global')) {
+                $visibility = 'institute'; // Global events are institute-wide
+            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                // Use the first organizational unit ID as visibility
+                $visibility = $request->organizational_unit_ids[0];
+            } else {
+                // Use user's organizational unit as visibility
+                $user = auth()->user();
+                if ($user->organizational_unit_id) {
+                    $visibility = $user->organizational_unit_id;
+                }
             }
 
             $data = [
@@ -510,10 +647,26 @@ class CalendarController extends Controller
                 'color' => $data['color'],
                 'user_id' => auth()->id(),
                 'is_all_day' => $request->is_all_day ?? false,
-                'calendar_type' => 'division',
+                'visibility' => $visibility,
                 'private' => $request->boolean('private'),
                 'google_event_id' => $googleEvent->id
             ]);
+
+            // Handle organizational units
+            if ($request->boolean('is_global')) {
+                // For global events, don't associate with any specific unit
+                // They will be visible to everyone
+                $event->organizationalUnits()->detach();
+            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                // Associate with selected organizational units
+                $event->organizationalUnits()->sync($request->organizational_unit_ids);
+            } else {
+                // Default to user's organizational unit if nothing selected
+                $userOrgUnitId = auth()->user()->organizational_unit_id;
+                if ($userOrgUnitId) {
+                    $event->organizationalUnits()->sync([$userOrgUnitId]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -561,7 +714,25 @@ class CalendarController extends Controller
                 'location' => 'nullable|string',
                 'color' => 'nullable|string',
                 'guests' => 'nullable|string',
+                'is_global' => 'nullable|boolean',
+                'organizational_unit_ids' => 'nullable|array',
+                'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
+
+            // Determine visibility based on settings
+            $visibility = 'institute'; // Default to institute-wide
+            if ($request->boolean('is_global')) {
+                $visibility = 'institute'; // Global events are institute-wide
+            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                // Use the first organizational unit ID as visibility
+                $visibility = $request->organizational_unit_ids[0];
+            } else {
+                // Use user's organizational unit as visibility
+                $user = auth()->user();
+                if ($user->organizational_unit_id) {
+                    $visibility = $user->organizational_unit_id;
+                }
+            }
 
             $data = [
                 'title' => $request->title,
@@ -590,7 +761,23 @@ class CalendarController extends Controller
                     'end_date' => $data['end_date'],
                     'location' => $data['location'],
                     'color' => $data['color'],
+                    'visibility' => $visibility,
                 ]);
+
+                // Handle organizational units
+                if ($request->boolean('is_global')) {
+                    // For global events, detach all organizational units
+                    $localEvent->organizationalUnits()->detach();
+                } else if ($request->has('organizational_unit_ids')) {
+                    // Sync with selected organizational units
+                    $localEvent->organizationalUnits()->sync($request->organizational_unit_ids);
+                } else {
+                    // Default to user's organizational unit if nothing selected
+                    $userOrgUnitId = auth()->user()->organizational_unit_id;
+                    if ($userOrgUnitId) {
+                        $localEvent->organizationalUnits()->sync([$userOrgUnitId]);
+                    }
+                }
             }
 
             return response()->json([
@@ -671,20 +858,20 @@ class CalendarController extends Controller
                 if ($isAdmin) {
                     // Admin sees institute and all sector-level events
                     $eventsQuery->where(function ($query) {
-                        $query->where('calendar_type', 'institute')
-                              ->orWhereIn('calendar_type', ['sector1', 'sector2', 'sector3', 'sector4']);
+                        $query->where('visibility', 'institute')
+                              ->orWhereIn('visibility', ['sector1', 'sector2', 'sector3', 'sector4']);
                     });
                 } else if ($isDivisionHead) {
                     $userSector = explode('_', $user->division)[0];
                     $eventsQuery->where(function($query) use ($user, $userSector) {
-                        $query->where('calendar_type', 'institute')
-                              ->orWhere('calendar_type', $userSector)
-                              ->orWhere('calendar_type', $user->division);
+                        $query->where('visibility', 'institute')
+                              ->orWhere('visibility', $userSector)
+                              ->orWhere('visibility', $user->division);
                     });
                 } else {
                     $eventsQuery->where(function($query) use ($user) {
-                        $query->where('calendar_type', 'institute')
-                              ->orWhere('calendar_type', $user->division);
+                        $query->where('visibility', 'institute')
+                              ->orWhere('visibility', $user->division);
                     });
                 }
 

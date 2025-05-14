@@ -1,8 +1,10 @@
 <div id="event-details-modal" class="fixed inset-y-0 right-0 z-[999] w-120 transform translate-x-full transition-transform duration-300 ease-in-out">
-    <div class="h-full bg-white shadow-xl shadow-black/10">
+    <div class="h-full bg-gray-50 shadow-xl shadow-black/10">
         <div class="p-8 h-full overflow-y-auto shadow-[-8px_0_15px_-3px_rgba(0,0,0,0.1)]">
-            <div class="flex justify-between items-center mb-8">
-                <h2 id="event-title" class="text-2xl font-bold text-gray-800"></h2>
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 id="event-title" class="text-xl font-semibold text-gray-800"></h2>
+                </div>
                 <button onclick="closeEventModal()" class="text-gray-500 hover:text-gray-700 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -10,11 +12,11 @@
                 </button>
             </div>
 
-            <div id="event-content" class="space-y-6">
+            <div id="event-content" class="space-y-5">
                 <!-- Content will be dynamically populated -->
             </div>
 
-            <div class="flex justify-end space-x-3 pt-6" id="event-action-buttons">
+            <div class="flex justify-end space-x-3 pt-4" id="event-action-buttons">
                 <!-- Buttons will be shown/hidden dynamically -->
             </div>
         </div>
@@ -53,9 +55,9 @@
         // Format dates for display
         const formatDate = (date) => {
             const options = { 
-                weekday: 'long',
+                weekday: 'short',
                 year: 'numeric', 
-                month: 'long', 
+                month: 'short', 
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -73,87 +75,87 @@
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
             if (days > 0) {
-                return `${days} day${days > 1 ? 's' : ''} ${hours > 0 ? `and ${hours} hour${hours > 1 ? 's' : ''}` : ''}`;
+                return `${days}d ${hours > 0 ? `${hours}h` : ''}`;
             } else if (hours > 0) {
-                return `${hours} hour${hours > 1 ? 's' : ''} ${minutes > 0 ? `and ${minutes} minute${minutes > 1 ? 's' : ''}` : ''}`;
+                return `${hours}h ${minutes > 0 ? `${minutes}m` : ''}`;
             } else {
-                return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+                return `${minutes}m`;
             }
         };
 
         content.innerHTML = `
-            <div class="space-y-6">
-                <div class="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 shadow-sm">
-                    <div class="flex items-center space-x-3 mb-4">
-                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="space-y-5">
+                <div class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100 shadow-sm">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <h3 class="text-lg font-semibold text-blue-900">Event Schedule</h3>
+                        <h3 class="text-base font-semibold text-blue-900">Event Schedule</h3>
                     </div>
                     
-                    <div class="grid grid-cols-1 gap-4">
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
-                            <div class="flex items-center space-x-3">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="bg-white p-3 rounded-lg shadow-sm border border-blue-100">
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                                    <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-medium text-gray-500">Starts</h4>
-                                    <p class="text-lg font-semibold text-gray-900">${formatDate(startDate)}</p>
+                                    <h4 class="text-xs font-medium text-gray-500">Starts</h4>
+                                    <p class="text-sm font-semibold text-gray-900">${formatDate(startDate)}</p>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
-                            <div class="flex items-center space-x-3">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="bg-white p-3 rounded-lg shadow-sm border border-blue-100">
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
+                                    <svg class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-medium text-gray-500">Ends</h4>
-                                    <p class="text-lg font-semibold text-gray-900">${endDate ? formatDate(endDate) : 'No end time specified'}</p>
+                                    <h4 class="text-xs font-medium text-gray-500">Ends</h4>
+                                    <p class="text-sm font-semibold text-gray-900">${endDate ? formatDate(endDate) : 'No end time specified'}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
-                            <div class="flex items-center space-x-3">
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="bg-white p-3 rounded-lg shadow-sm border border-blue-100">
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center">
+                                    <svg class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-medium text-gray-500">Duration</h4>
-                                    <p class="text-lg font-semibold text-gray-900">${getDuration(startDate, endDate)}</p>
+                                    <h4 class="text-xs font-medium text-gray-500">Duration</h4>
+                                    <p class="text-sm font-semibold text-gray-900">${getDuration(startDate, endDate)}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Description</h3>
-                    <p class="text-gray-600">${event.extendedProps.description || 'No description provided'}</p>
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-900 mb-2">Description</h3>
+                    <p class="text-sm text-gray-600">${event.extendedProps.description || 'No description provided'}</p>
                 </div>
 
-                <div class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Location</h3>
-                    <p class="text-gray-600">${event.extendedProps.location || 'No location specified'}</p>
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-base font-semibold text-gray-900 mb-2">Location</h3>
+                    <p class="text-sm text-gray-600">${event.extendedProps.location || 'No location specified'}</p>
                 </div>
 
                 ${event.extendedProps.guests && event.extendedProps.guests.length > 0 ? `
-                    <div class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Guests</h3>
-                        <div class="flex flex-wrap gap-2">
+                    <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                        <h3 class="text-base font-semibold text-gray-900 mb-2">Guests</h3>
+                        <div class="flex flex-wrap gap-1.5">
                             ${event.extendedProps.guests.map(guest => `
-                                <span class="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-600">
+                                <span class="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
                                     ${guest}
                                 </span>
                             `).join('')}
@@ -180,14 +182,14 @@
         // Show action buttons
         actionButtons.innerHTML = `
             ${eventCreatorId === currentUserId ? `
-                <button onclick="editEvent()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onclick="editEvent()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1.5 text-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     <span>Edit</span>
                 </button>
-                <button onclick="deleteEvent()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onclick="deleteEvent()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-1.5 text-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     <span>Delete</span>
@@ -394,7 +396,7 @@
     document.addEventListener('mousedown', function(event) {
         if (document.querySelector('.swal2-container')) return;
         const modal = document.getElementById('event-details-modal');
-        const modalContent = modal.querySelector('.h-full.bg-white');
+        const modalContent = modal.querySelector('.h-full.bg-gray-50');
         if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
             closeEventModal();
         }

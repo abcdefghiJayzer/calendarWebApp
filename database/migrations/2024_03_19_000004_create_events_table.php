@@ -19,7 +19,7 @@ return new class extends Migration
             $table->boolean('is_all_day')->default(false);
             $table->string('color')->nullable();
             $table->enum('status', ['pending', 'confirmed', 'cancelled'])->default('pending');
-            $table->string('calendar_type')->default('institute');
+            $table->string('visibility', 50)->default('institute');
             $table->boolean('private')->default(false);
             $table->string('google_event_id')->nullable();
             $table->timestamps();

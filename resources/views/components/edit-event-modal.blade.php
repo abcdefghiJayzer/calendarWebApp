@@ -10,73 +10,188 @@
                 </button>
             </div>
 
-            <form id="edit-event-form" class="space-y-5">
+            <form id="edit-event-form" method="POST" class="space-y-5">
                 @csrf
                 <input type="hidden" id="edit-event-id" name="id">
 
                 <div class="space-y-2">
-                    <label for="edit-calendar_type" class="block text-sm font-medium text-gray-700">Calendar Type</label>
-                    <div class="relative">
-                        @if(auth()->user()->division === 'institute')
-                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                                <option value="institute">Institute-wide Calendar (For All Divisions)</option>
-                                <optgroup label="Sector Calendars">
-                                    <option value="sector1">Sector 1 (All Sector 1 Divisions)</option>
-                                    <option value="sector2">Sector 2 (All Sector 2 Divisions)</option>
-                                    <option value="sector3">Sector 3 (All Sector 3 Divisions)</option>
-                                    <option value="sector4">Sector 4 (All Sector 4 Divisions)</option>
-                                </optgroup>
-                                <optgroup label="Division-specific Calendars">
-                                    <option value="sector1_div1">Sector 1 - Division 1 Only</option>
-                                    <option value="sector2_div1">Sector 2 - Division 1 Only</option>
-                                    <option value="sector3_div1">Sector 3 - Division 1 Only</option>
-                                    <option value="sector4_div1">Sector 4 - Division 1 Only</option>
-                                </optgroup>
-                            </select>
-                        @elseif(auth()->user()->is_division_head)
-                            @php
-                                $userDivision = auth()->user()->division;
-                                $userSector = explode('_', $userDivision)[0];
-                            @endphp
-                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                                <option value="{{ $userSector }}">{{ ucfirst($userSector) }} - All Divisions</option>
-                                <option value="{{ $userDivision }}">{{ ucfirst(str_replace('_', ' - ', $userDivision)) }} Only</option>
-                            </select>
-                        @else
-                            <select name="calendar_type" id="edit-calendar_type" required class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                                <option value="{{ auth()->user()->division }}">
-                                    {{ ucfirst(str_replace('_', ' - ', auth()->user()->division)) }} Calendar
-                                </option>
-                            </select>
-                            <p class="text-xs text-gray-500 italic mt-1">
-                                Regular users can only create/edit events in their assigned division calendar.
-                            </p>
-                        @endif
+                    <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
+                    <div class="relative space-y-2">
+                        @php
+                            $user = auth()->user();
+                            $userUnit = $user->organizationalUnit;
+                            $isAdmin = $user->division === 'institute';
+                            
+                            // Get all organizational units
+                            $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
+                            $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
+                        @endphp
+
+                        <!-- Organizational Units Dropdown -->
+                        <div class="relative">
+                            <button id="editOrganizationalUnitsButton" data-dropdown-toggle="editOrganizationalUnitsDropdown" 
+                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
+                                type="button">
+                                <span id="editSelectedUnitsText">Select organizational units</span>
+                                <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown menu -->
+                            <div id="editOrganizationalUnitsDropdown" class="z-10 hidden w-full bg-white rounded-lg shadow-lg border border-gray-200 mt-1">
+                                <!-- Role-based Permissions Header -->
+                                <div class="p-3 border-b border-gray-200">
+                                    <h3 class="text-sm font-semibold text-gray-900 mb-2">Your Permissions:</h3>
+                                    @if($isAdmin)
+                                        <p class="text-xs text-gray-600">You can create events visible to all organizational units or any combination of sectors and divisions.</p>
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <p class="text-xs text-gray-600">You can create events visible to your entire sector or specific divisions within it.</p>
+                                    @else
+                                        <p class="text-xs text-gray-600">You can only create events visible to your own division.</p>
+                                    @endif
+                                </div>
+
+                                <ul class="p-3 space-y-1 text-sm text-gray-700" aria-labelledby="editOrganizationalUnitsButton">
+                                    <!-- Global Event Option -->
+                                    @if($isAdmin || ($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin'))
+                                    <li class="border-b border-gray-200 pb-2 mb-2">
+                                        <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                            <input type="checkbox" name="is_global" id="edit-is_global" value="1" 
+                                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                            <label for="edit-is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                Global Event (Visible to Everyone)
+                                            </label>
+                                        </div>
+                                    </li>
+                                    @endif
+
+                                    @if($isAdmin)
+                                        <!-- Admin can see all sectors and divisions -->
+                                        @foreach($sectors->where('name', '!=', 'Admin') as $sector)
+                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $sector->id }}"
+                                                        id="edit-sector-{{ $sector->id }}"
+                                                        class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $sector->id }}">
+                                                    <label for="edit-sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                        {{ $sector->name }} (Entire Sector)
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
+                                                <li>
+                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                        <input type="checkbox" 
+                                                            name="organizational_unit_ids[]" 
+                                                            value="{{ $division->id }}"
+                                                            id="edit-division-{{ $division->id }}"
+                                                            class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                            data-sector-id="{{ $sector->id }}">
+                                                        <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                            {{ $division->name }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        @endforeach
+                                    @elseif($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin')
+                                        <!-- Admin sector head can select from Research and Development sectors -->
+                                        @foreach($sectors->where('name', '!=', 'Admin') as $sector)
+                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $sector->id }}"
+                                                        id="edit-sector-{{ $sector->id }}"
+                                                        class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $sector->id }}">
+                                                    <label for="edit-sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                        {{ $sector->name }} (Entire Sector)
+                                                    </label>
+                                                </div>
+                                            </li>
+                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
+                                                <li>
+                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                        <input type="checkbox" 
+                                                            name="organizational_unit_ids[]" 
+                                                            value="{{ $division->id }}"
+                                                            id="edit-division-{{ $division->id }}"
+                                                            class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                            data-sector-id="{{ $sector->id }}">
+                                                        <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                            {{ $division->name }}
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        @endforeach
+                                    @elseif($userUnit && $userUnit->type === 'sector')
+                                        <!-- Regular sector heads can see only their sector and its divisions -->
+                                        <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="edit-sector-{{ $userUnit->id }}"
+                                                    class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    data-sector-id="{{ $userUnit->id }}">
+                                                <label for="edit-sector-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
+                                                    {{ $userUnit->name }} (Entire Sector)
+                                                </label>
+                                            </div>
+                                        </li>
+                                        @foreach($divisions->where('parent_id', $userUnit->id) as $division)
+                                            <li>
+                                                <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
+                                                    <input type="checkbox" 
+                                                        name="organizational_unit_ids[]" 
+                                                        value="{{ $division->id }}"
+                                                        id="edit-division-{{ $division->id }}"
+                                                        class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                        data-sector-id="{{ $userUnit->id }}">
+                                                    <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                        {{ $division->name }}
+                                                    </label>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    @elseif($userUnit)
+                                        <!-- Division Head and Employees can only see their division -->
+                                        <li>
+                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
+                                                <input type="checkbox" 
+                                                    name="organizational_unit_ids[]" 
+                                                    value="{{ $userUnit->id }}"
+                                                    id="edit-division-{{ $userUnit->id }}"
+                                                    class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    checked
+                                                    disabled>
+                                                <label for="edit-division-{{ $userUnit->id }}" class="w-full ms-2 text-sm text-gray-700">
+                                                    {{ $userUnit->name }}
+                                                </label>
+                                            </div>
+                                        </li>
+                                    @else
+                                        <li class="text-center py-2 text-gray-500">No organizational units available</li>
+                                    @endif
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                     <p class="text-xs text-gray-500 mt-1">
-                        <strong>Calendar Types:</strong><br>
-                        • Institute-wide: Visible to everyone<br>
+                        <strong>Visibility Rules:</strong><br>
+                        • Global: Visible to everyone<br>
                         • Sector: Events for an entire sector with multiple divisions<br>
-                        • Division-specific: Events that only affect one division
+                        • Division: Events that only affect one division
                     </p>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700">Choose Event Color:</label>
-                    <div class="flex space-x-3">
-                        @foreach([
-                            '#3b82f6' => 'bg-blue-500',
-                            '#ef4444' => 'bg-red-500',
-                            '#eab308' => 'bg-yellow-500',
-                            '#22c55e' => 'bg-green-500',
-                            '#000000' => 'bg-black'
-                        ] as $hex => $bg)
-                            <label class="cursor-pointer edit-color-option rounded-full group" data-color="{{ $hex }}">
-                                <input type="radio" name="color" value="{{ $hex }}" class="hidden">
-                                <div class="w-8 h-8 rounded-full border-2 border-gray-300 {{ $bg }} transition-all duration-200 group-hover:scale-110"></div>
-                            </label>
-                        @endforeach
-                    </div>
                 </div>
 
                 <div class="space-y-2">
@@ -133,149 +248,6 @@
                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         <span class="ml-3 text-sm font-medium text-gray-700">Private Event</span>
                     </label>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
-                    <div class="relative space-y-2">
-                        @php
-                            $user = auth()->user();
-                            $userUnit = $user->organizationalUnit;
-                            $isAdmin = $user->division === 'institute';
-                            
-                            // Get all organizational units
-                            $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
-                            $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
-                        @endphp
-
-                        <!-- Organizational Units Dropdown -->
-                        <div class="relative">
-                            <button id="editOrganizationalUnitsButton" data-dropdown-toggle="editOrganizationalUnitsDropdown" 
-                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
-                                type="button">
-                                <span id="editSelectedUnitsText">Select organizational units</span>
-                                <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
-                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
-                                </svg>
-                            </button>
-
-                            <!-- Dropdown menu -->
-                            <div id="editOrganizationalUnitsDropdown" class="z-10 hidden w-full bg-white rounded-lg shadow-lg border border-gray-200 mt-1">
-                                <!-- Role-based Permissions Header -->
-                                <div class="p-3 border-b border-gray-200">
-                                    <h3 class="text-sm font-semibold text-gray-900 mb-2">Your Permissions:</h3>
-                                    @if($isAdmin)
-                                        <p class="text-xs text-gray-600">You can create events visible to all organizational units or any combination of sectors and divisions.</p>
-                                    @elseif($userUnit && $userUnit->type === 'sector')
-                                        <p class="text-xs text-gray-600">You can create events visible to your entire sector or specific divisions within it.</p>
-                                    @else
-                                        <p class="text-xs text-gray-600">You can only create events visible to your own division.</p>
-                                    @endif
-                                </div>
-
-                                <ul class="p-3 space-y-1 text-sm text-gray-700" aria-labelledby="editOrganizationalUnitsButton">
-                                    <!-- Global Event Option (moved inside dropdown) -->
-                                    <li class="border-b border-gray-200 pb-2 mb-2">
-                                        <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                            <input type="checkbox" name="is_global" id="edit-is_global" value="1" 
-                                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                                            <label for="edit-is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
-                                                Global Event (Visible to Everyone)
-                                            </label>
-                                        </div>
-                                    </li>
-
-                                    @if($isAdmin)
-                                        <!-- Admin can see all sectors and divisions -->
-                                        @foreach($sectors as $sector)
-                                            <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
-                                            <li>
-                                                <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
-                                                        value="{{ $sector->id }}"
-                                                        id="edit-sector-{{ $sector->id }}"
-                                                        class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                        data-sector-id="{{ $sector->id }}">
-                                                    <label for="edit-sector-{{ $sector->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
-                                                        All Divisions
-                                                    </label>
-                                                </div>
-                                            </li>
-                                            @foreach($divisions->where('parent_id', $sector->id) as $division)
-                                                <li>
-                                                    <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                        <input type="checkbox" 
-                                                            name="organizational_unit_ids[]" 
-                                                            value="{{ $division->id }}"
-                                                            id="edit-division-{{ $division->id }}"
-                                                            class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                            data-sector-id="{{ $sector->id }}">
-                                                        <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
-                                                            {{ $division->name }}
-                                                        </label>
-                                                    </div>
-                                                </li>
-                                            @endforeach
-                                        @endforeach
-                                    @elseif($userUnit && $userUnit->type === 'sector')
-                                        <!-- Sector Head can see their sector and its divisions -->
-                                        <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
-                                        <li>
-                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
-                                                    value="{{ $userUnit->id }}"
-                                                    id="edit-sector-{{ $userUnit->id }}"
-                                                    class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                    data-sector-id="{{ $userUnit->id }}">
-                                                <label for="edit-sector-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
-                                                    All Divisions
-                                                </label>
-                                            </div>
-                                        </li>
-                                        @foreach($divisions->where('parent_id', $userUnit->id) as $division)
-                                            <li>
-                                                <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
-                                                        value="{{ $division->id }}"
-                                                        id="edit-division-{{ $division->id }}"
-                                                        class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                        data-sector-id="{{ $userUnit->id }}">
-                                                    <label for="edit-division-{{ $division->id }}" class="w-full ms-2 text-sm text-gray-700">
-                                                        {{ $division->name }}
-                                                    </label>
-                                                </div>
-                                            </li>
-                                        @endforeach
-                                    @elseif($userUnit)
-                                        <!-- Division Head and Employees can only see their division -->
-                                        <li>
-                                            <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
-                                                    value="{{ $userUnit->id }}"
-                                                    id="edit-division-{{ $userUnit->id }}"
-                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                                                <label for="edit-division-{{ $userUnit->id }}" class="w-full ms-2 text-sm font-medium text-gray-900">
-                                                    {{ $userUnit->name }}
-                                                </label>
-                                            </div>
-                                        </li>
-                                    @else
-                                        <li class="text-center py-2 text-gray-500">No organizational units available</li>
-                                    @endif
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">
-                        <strong>Visibility Rules:</strong><br>
-                        • Global: Visible to everyone<br>
-                        • Sector: Events for an entire sector with multiple divisions<br>
-                        • Division: Events that only affect one division
-                    </p>
                 </div>
 
                 <div class="flex justify-end space-x-3 pt-4">
@@ -363,9 +335,18 @@ window.openEditModal = function(event) {
     console.log('Edit check - Current user:', currentUserId, 'Creator:', eventCreatorId);
     console.log('Full event data:', event);
 
-    // Allow edit only if user is the creator (even for admins)
-    const isAdmin = "{{ auth()->user()->division }}" === "institute";
-    if (eventCreatorId && currentUserId != eventCreatorId) {
+    // Allow edit if user is admin or the creator
+    const isAdmin = {{ auth()->user()->is_admin ? 'true' : 'false' }};
+    const isAdminSectorHead = "{{ auth()->user()->organizationalUnit->name ?? '' }}" === "Admin" && "{{ auth()->user()->organizationalUnit->type ?? '' }}" === "sector";
+    const isDivisionHead = {{ auth()->user()->is_division_head ? 'true' : 'false' }};
+    const isDivisionEmployee = !isAdmin && !isAdminSectorHead && !isDivisionHead;
+    
+    // Set the form action with the event ID
+    const form = document.getElementById('edit-event-form');
+    form.action = `/OJT/calendarWebApp/events/${event.id}`;
+
+    // Check permissions
+    if (!isAdmin && !isAdminSectorHead && !isDivisionHead && eventCreatorId && currentUserId != eventCreatorId) {
         Swal.fire({
             icon: 'error',
             title: 'Permission Denied',
@@ -375,7 +356,7 @@ window.openEditModal = function(event) {
         return;
     }
 
-    // Additional permission check for division access (keep this for division-level permissions)
+    // Additional permission check for division access
     console.log('Opening edit modal with event:', event);
 
     const modal = document.getElementById('edit-event-modal');
@@ -464,17 +445,6 @@ window.openEditModal = function(event) {
         return;
     }
 
-    // Set color
-    const colorOption = document.querySelector(`.edit-color-option[data-color="${eventData.backgroundColor}"]`);
-    if (colorOption) {
-        const colorInput = colorOption.querySelector('input');
-        colorInput.checked = true;
-        document.querySelectorAll(".edit-color-option").forEach(el => {
-            el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
-        });
-        colorOption.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
-    }
-
     // Set guests
     editGuests = eventData.extendedProps.guests || event.guests || [];
     document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
@@ -486,6 +456,49 @@ window.openEditModal = function(event) {
     });
 
     editGuests.forEach(email => createEditGuestTag(email));
+
+    // Handle organizational units visibility
+    const organizationalUnitIds = eventData.extendedProps.organizational_unit_ids || [];
+    const isGlobal = eventData.extendedProps.is_global || organizationalUnitIds.length === 0;
+    
+    // Debug logging
+    console.log('Event Data:', eventData);
+    console.log('Organizational Unit IDs:', organizationalUnitIds);
+    console.log('Is Global:', isGlobal);
+    
+    // For division employees and division heads, automatically set their division
+    if (isDivisionEmployee || isDivisionHead) {
+        const divisionCheckbox = document.querySelector('input[name="organizational_unit_ids[]"]');
+        if (divisionCheckbox) {
+            divisionCheckbox.checked = true;
+            divisionCheckbox.disabled = true;
+        }
+        // Hide the global checkbox if it exists
+        const globalCheckbox = document.getElementById('edit-is_global');
+        if (globalCheckbox) {
+            globalCheckbox.disabled = true;
+            globalCheckbox.checked = false;
+        }
+    } else {
+        // For admin and admin sector head, handle normally
+        const globalCheckbox = document.getElementById('edit-is_global');
+        if (globalCheckbox) {
+            globalCheckbox.checked = isGlobal;
+            globalCheckbox.disabled = false;
+        }
+
+        // Enable/disable org unit checkboxes based on global setting
+        document.querySelectorAll('input[name="organizational_unit_ids[]"]').forEach(checkbox => {
+            checkbox.disabled = isGlobal;
+            // Convert checkbox value to number for comparison
+            const checkboxValue = parseInt(checkbox.value);
+            // Check if this organizational unit ID is in the array
+            checkbox.checked = organizationalUnitIds.includes(checkboxValue);
+        });
+    }
+
+    // Update the selected units text
+    updateEditSelectedUnitsText();
 
     // Show/hide Sync to Google button based on event status and Google authentication
     const syncButton = document.getElementById('sync-to-google-btn');
@@ -501,94 +514,6 @@ window.openEditModal = function(event) {
 
     if (isLocalEvent && isAuthenticated && !hasGoogleId) {
         syncButton.classList.remove('hidden');
-
-        // Add click handler for sync button
-        syncButton.onclick = async function(e) {
-            e.preventDefault();
-
-            // Show loading state
-            const originalText = syncButton.innerHTML;
-            syncButton.disabled = true;
-            syncButton.innerHTML = `
-                <svg class="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Syncing...
-            `;
-
-            try {
-                const eventId = document.getElementById('edit-event-id').value;
-                const response = await fetch(`${window.baseUrl}/events/${eventId}/sync-to-google`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // If there's a redirect URL, user needs to authenticate
-                    if (result.redirect) {
-                        Swal.fire({
-                            title: 'Authentication Required',
-                            text: result.message || 'You need to authenticate with Google Calendar',
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#22c55e',
-                            confirmButtonText: 'Connect Now',
-                            cancelButtonText: 'Cancel'
-                        }).then((swalResult) => {
-                            if (swalResult.isConfirmed) {
-                                window.location.href = result.redirect;
-                            }
-                        });
-                    } else if (result.alreadySynced) {
-                        // Already synced
-                        Swal.fire({
-                            icon: 'info',
-                            title: 'Already Synced',
-                            text: result.message || 'This event is already synced with Google Calendar',
-                            confirmButtonColor: '#22c55e'
-                        });
-                        // Hide the sync button
-                        syncButton.classList.add('hidden');
-                    } else {
-                        // Success
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success',
-                            text: result.message || 'Event synced successfully to Google Calendar!',
-                            confirmButtonColor: '#22c55e'
-                        }).then(() => {
-                            // Hide the sync button after successful sync
-                            syncButton.classList.add('hidden');
-                            // Refresh calendar
-                            if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
-                                window.calendar.refetchEvents();
-                            }
-                        });
-                    }
-                } else {
-                    throw new Error(result.message || 'Failed to sync event');
-                }
-            } catch (error) {
-                console.error('Error syncing event to Google Calendar:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Sync Failed',
-                    text: error.message || 'Failed to sync event. Please try again.',
-                    confirmButtonColor: '#22c55e'
-                });
-            } finally {
-                // Restore button state
-                syncButton.disabled = false;
-                syncButton.innerHTML = originalText;
-            }
-        };
     } else {
         syncButton.classList.add('hidden');
     }
@@ -616,17 +541,17 @@ window.openEditModal = function(event) {
         }
     }
 
-    // For non-institute users, check if they can edit this event
+    // For non-admin users, check if they can edit this event
     const userDivision = "{{ auth()->user()->division }}";
     const userIsDivisionHead = {{ auth()->user()->is_division_head ? 'true' : 'false' }};
     const eventDivision = eventData.extendedProps.calendarType ||
-                         (eventData.extendedProps.calendar_type || 'institute');
+                         (eventData.extendedProps.calendar_type || 'admin');
 
     // For division heads, extract their sector from their division
     const userSector = userDivision.split('_')[0]; // e.g., sector1_div1 -> sector1
 
-    // Access check
-    if (userDivision !== 'institute') {
+    // Access check - Skip for admin and admin sector head
+    if (!isAdmin && !isAdminSectorHead) {
         let hasAccess = false;
 
         if (userIsDivisionHead) {
@@ -694,23 +619,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('edit-event-form');
     const guestInput = document.getElementById('edit-guest-input');
 
-    // Color option handling
-    document.querySelectorAll(".edit-color-option input").forEach(option => {
-        option.addEventListener("change", function() {
-            document.querySelectorAll(".edit-color-option").forEach(el => {
-                el.classList.remove("ring-4", "ring-offset-2", "ring-blue-300");
-            });
-            this.parentElement.classList.add("ring-4", "ring-offset-2", "ring-blue-300");
-        });
-    });
-
-    // Prevent Enter key submission except for guest input
-    form.querySelectorAll('input:not(#edit-guest-input)').forEach(input => {
-        input.addEventListener('keydown', function(event) {
-            if (event.key === "Enter") event.preventDefault();
-        });
-    });
-
     // Guest input handling
     guestInput.addEventListener('keydown', async function(event) {
         if (event.key !== "Enter") return;
@@ -735,39 +643,81 @@ document.addEventListener('DOMContentLoaded', function() {
         this.classList.remove('border-red-500');
     });
 
+    // Replace the click outside handler
+    document.addEventListener('mousedown', function(event) {
+        if (document.querySelector('.swal2-container')) {
+            return;
+        }
+        const modal = document.getElementById('edit-event-modal');
+        if (!modal) return;
+
+        const modalContent = modal.querySelector('.h-full');
+        if (!modalContent) return;
+
+        if (!modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
+            window.closeEditModal();
+        }
+    }, true);
+
     // Form submission
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        // Handle pending email input first
-        const emailInput = document.getElementById('edit-guest-input');
-        const email = emailInput.value.trim();
-        if (email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (emailRegex.test(email) && !editGuests.includes(email)) {
-                editGuests.push(email);
-                createEditGuestTag(email);
-                document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
-                emailInput.value = "";
-            }
-        }
-
-        const eventId = document.getElementById('edit-event-id').value;
-        const formData = new FormData(this);
-
         try {
+            // Handle any pending guest input
+            const emailInput = document.getElementById('edit-guest-input');
+            const email = emailInput.value.trim();
+            if (email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (emailRegex.test(email)) {
+                    if (!editGuests.includes(email)) {
+                        editGuests.push(email);
+                        createEditGuestTag(email);
+                        document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
+                    }
+                    emailInput.value = "";
+                } else {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Email',
+                        text: 'Please enter a valid email address for the guest',
+                        confirmButtonColor: '#22c55e'
+                    });
+                    return;
+                }
+            }
+
+            // Check if at least one organizational unit is selected or global is checked
+            const isGlobalCheckbox = document.getElementById('edit-is_global');
+            const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
+            const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+            
+            if (!isGlobal && selectedUnits.length === 0) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Visibility Required',
+                    text: 'Please select at least one organizational unit or mark as global event',
+                    confirmButtonColor: '#22c55e'
+                });
+                return;
+            }
+
+            const formData = new FormData(this);
+
             // Check for guest scheduling conflicts
             if (editGuests.length > 0) {
                 const startDate = document.getElementById('edit-start-date').value;
                 const endDate = document.getElementById('edit-end-date').value || startDate;
+                const eventId = document.getElementById('edit-event-id').value;
+
                 const checkData = new URLSearchParams();
                 checkData.append('guests', JSON.stringify(editGuests));
                 checkData.append('start_date', startDate);
                 checkData.append('end_date', endDate);
-                checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
                 checkData.append('event_id', eventId);
+                checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
 
-                const checkResponse = await fetch(`${window.baseUrl}/check-conflicts`, {
+                const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
                     method: 'POST',
                     body: checkData,
                     headers: {
@@ -780,8 +730,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
                     let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
+
                     conflictResult.conflicts.forEach(conflict => {
                         conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
+
                         conflict.events.forEach(event => {
                             const startDate = new Date(event.start).toLocaleString();
                             const endDate = new Date(event.end).toLocaleString();
@@ -789,6 +741,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
                             conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
                         });
+
+                        conflictHtml += '<br>';
                     });
 
                     const result = await Swal.fire({
@@ -808,231 +762,165 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Check if this is a Google event
-            let response;
-            console.log('Updating event, is Google event:', window.currentEditingGoogleEvent, 'Event ID:', eventId);
-            if (window.currentEditingGoogleEvent) {
-                // Extract the actual Google event ID
-                const googleEventId = eventId.replace('google_', '');
-                console.log('Updating Google event with ID:', googleEventId);
-
-                try {
-                    // Debug the contents of formData
-                    console.log("Form data being sent for Google Calendar update:");
-                    for (let pair of formData.entries()) {
-                        console.log(pair[0] + ': ' + pair[1]);
-                    }
-
-                    response = await window.googleCalendar.updateEvent(googleEventId, formData);
-                    console.log('Google update response:', response);
-                } catch (error) {
-                    console.error('Error with Google update:', error);
-                    throw error;
+            // Proceed with event update
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
+            });
+
+            let responseData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json();
             } else {
-                // Regular event update
-                console.log('Sending update for regular event ID:', eventId);
-                console.log('Form data being sent:');
-                for (let pair of formData.entries()) {
-                    console.log(pair[0] + ': ' + pair[1]);
-                }
-
-                try {
-                    // Send the request
-                    const fetchResponse = await fetch(`${window.baseUrl}/events/${eventId}`, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                            'Accept': 'application/json'
-                        }
-                    });
-
-                    // Get the response text first
-                    const responseText = await fetchResponse.text();
-                    console.log('Server response text:', responseText);
-
-                    // Create a response-like object with the parsed data
-                    response = {
-                        ok: fetchResponse.ok,
-                        status: fetchResponse.status,
-                        success: false,
-                        message: ''
-                    };
-
-                    if (responseText) {
-                        try {
-                            const responseData = JSON.parse(responseText);
-                            response.success = responseData.success;
-                            response.message = responseData.message;
-                            response.data = responseData;
-                            console.log('Parsed response data:', responseData);
-                        } catch (jsonError) {
-                            console.error('Error parsing JSON response:', jsonError);
-                            // If we can't parse JSON but the request was successful, consider it a success
-                            if (fetchResponse.ok) {
-                                response.success = true;
-                                response.message = 'Event updated successfully';
-                            }
-                        }
-                    }
-                } catch (fetchError) {
-                    console.error('Fetch error:', fetchError);
-                    throw fetchError;
-                }
+                responseData = {
+                    success: response.ok,
+                    message: response.ok ? 'Event updated successfully!' : 'Failed to update event'
+                };
             }
 
-            if (response.ok || (response.success !== undefined && response.success)) {
-                // Force immediate refresh before closing modal and showing alert
-                if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
-                    console.log('Calling calendar.refetchEvents()');
-                    try {
-                        window.calendar.refetchEvents();
-                    } catch (refreshError) {
-                        console.error('Error refreshing calendar:', refreshError);
-                    }
-                }
-
-                // Close modal
-                window.closeEditModal();
-
-                Swal.fire({
+            if (response.ok) {
+                await Swal.fire({
                     icon: 'success',
                     title: 'Success',
-                    text: response.message || 'Event updated successfully!',
+                    text: responseData.message || 'Event updated successfully!',
                     confirmButtonColor: '#22c55e'
-                }).then(() => {
-                    console.log('Refreshing calendar after confirmation');
-                    // Force reload after confirmation - fail-safe
-                    if (window.calendar && typeof window.calendar.refetchEvents === 'function') {
-                        window.calendar.refetchEvents();
-                    } else {
-                        console.log('Reloading page as fallback');
-                        location.reload();
-                    }
                 });
+
+                closeEditModal();
+                window.location.reload();
             } else {
-                // Handle error using the response object we created, not trying to read the body again
-                const errorMessage = response.message || response.data?.error || 'Failed to update event';
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: errorMessage,
-                    confirmButtonColor: '#22c55e'
-                });
+                throw new Error(responseData.message || responseData.error || 'Failed to update event');
             }
+
         } catch (error) {
-            console.error('Error updating event:', error);
-            Swal.fire({
+            console.error('Error:', error);
+            await Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'Failed to update event. Please try again.',
+                text: error.message || 'An error occurred while updating the event',
                 confirmButtonColor: '#22c55e'
             });
         }
     });
 
-    // Replace the click outside handler
-    document.addEventListener('mousedown', function(event) {
-        if (document.querySelector('.swal2-container')) {
-            return;
-        }
-        const modal = document.getElementById('edit-event-modal');
-        const modalContent = modal.querySelector('.h-full.bg-white');
-
-        if (modal && !modal.classList.contains('translate-x-full') && !modalContent.contains(event.target)) {
-            window.closeEditModal();
-        }
-    }, true);
-
     // Handle global checkbox
-    document.getElementById('edit-is_global').addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
-        
-        checkboxes.forEach(checkbox => {
-            checkbox.disabled = this.checked;
-            if (this.checked) {
-                checkbox.checked = false;
-            }
-        });
-        
-        if (this.checked) {
-            document.getElementById('editSelectedUnitsText').textContent = 'Global Event';
-        } else {
+    const globalCheckbox = document.getElementById('edit-is_global');
+    if (globalCheckbox) {
+        globalCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.disabled = this.checked;
+                if (this.checked) {
+                    checkbox.checked = false;
+                }
+            });
+            
             updateEditSelectedUnitsText();
-        }
-    });
+        });
+    }
 
     // Initialize dropdown functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        const dropdownButton = document.getElementById('editOrganizationalUnitsButton');
-        const dropdown = document.getElementById('editOrganizationalUnitsDropdown');
-        
-        if (!dropdownButton || !dropdown) {
-            console.error('Dropdown elements not found');
-            return;
+    initializeEditDropdown();
+    initializeEditCheckboxes();
+});
+
+// Initialize edit dropdown toggle
+function initializeEditDropdown() {
+    const dropdownButton = document.getElementById('editOrganizationalUnitsButton');
+    const dropdown = document.getElementById('editOrganizationalUnitsDropdown');
+    
+    if (!dropdownButton || !dropdown) {
+        console.error('Edit dropdown elements not found');
+        return;
+    }
+    
+    dropdownButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        dropdown.classList.toggle('hidden');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') && 
+            !dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.add('hidden');
         }
-        
-        dropdownButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            dropdown.classList.toggle('hidden');
-        });
+    });
+}
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
-                dropdown.classList.add('hidden');
-            }
-        });
-        
-        // Initialize sector checkboxes
-        document.querySelectorAll('.edit-sector-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const sectorId = this.dataset.sectorId;
-                const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
-                
-                divisionCheckboxes.forEach(divCheckbox => {
-                    divCheckbox.checked = this.checked;
-                    divCheckbox.disabled = this.checked;
-                });
-                
-                updateEditSelectedUnitsText();
-            });
-        });
-
-        // Initialize division checkboxes
-        document.querySelectorAll('.edit-division-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const sectorId = this.dataset.sectorId;
-                const sectorCheckbox = document.querySelector(`.edit-sector-checkbox[data-sector-id="${sectorId}"]`);
-                const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
-                
-                if (sectorCheckbox) {
-                    // If all divisions are checked, check the sector
-                    const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
-                    sectorCheckbox.checked = allChecked;
+// Initialize edit checkboxes
+function initializeEditCheckboxes() {
+    // Global checkbox
+    const globalCheckbox = document.getElementById('edit-is_global');
+    if (globalCheckbox) {
+        globalCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.disabled = this.checked;
+                if (this.checked) {
+                    checkbox.checked = false;
                 }
-                
-                updateEditSelectedUnitsText();
             });
+            
+            updateEditSelectedUnitsText();
+        });
+    }
+    
+    // Sector checkboxes
+    document.querySelectorAll('.edit-sector-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const sectorId = this.dataset.sectorId;
+            const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
+            
+            divisionCheckboxes.forEach(divCheckbox => {
+                divCheckbox.checked = this.checked;
+                divCheckbox.disabled = this.checked;
+            });
+            
+            updateEditSelectedUnitsText();
         });
     });
 
-    function updateEditSelectedUnitsText() {
-        const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
-        const selectedText = document.getElementById('editSelectedUnitsText');
-        const isGlobal = document.getElementById('edit-is_global').checked;
-        
-        if (isGlobal) {
-            selectedText.textContent = 'Global Event';
-        } else if (selectedCheckboxes.length === 0) {
-            selectedText.textContent = 'Select organizational units';
-        } else if (selectedCheckboxes.length === 1) {
-            selectedText.textContent = selectedCheckboxes[0].nextElementSibling.textContent.trim();
-        } else {
-            selectedText.textContent = `${selectedCheckboxes.length} units selected`;
-        }
+    // Division checkboxes
+    document.querySelectorAll('.edit-division-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const sectorId = this.dataset.sectorId;
+            const sectorCheckbox = document.querySelector(`.edit-sector-checkbox[data-sector-id="${sectorId}"]`);
+            const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
+            
+            if (sectorCheckbox) {
+                // If all divisions are checked, check the sector
+                const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
+                sectorCheckbox.checked = allChecked;
+            }
+            
+            updateEditSelectedUnitsText();
+        });
+    });
+}
+
+function updateEditSelectedUnitsText() {
+    const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked:not(:disabled)');
+    const selectedText = document.getElementById('editSelectedUnitsText');
+    const isGlobalCheckbox = document.getElementById('edit-is_global');
+    
+    if (isGlobalCheckbox && isGlobalCheckbox.checked) {
+        selectedText.textContent = 'Global Event';
+    } else if (selectedCheckboxes.length === 0) {
+        selectedText.textContent = 'Select organizational units';
+    } else if (selectedCheckboxes.length === 1) {
+        selectedText.textContent = selectedCheckboxes[0].nextElementSibling.textContent.trim();
+    } else {
+        selectedText.textContent = `${selectedCheckboxes.length} units selected`;
     }
-});
+}
 </script>
 
