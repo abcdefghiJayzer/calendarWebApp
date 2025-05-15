@@ -56,12 +56,14 @@ class CalendarController extends Controller
             // Show events that are either:
             // 1. Created by the user
             // 2. Events where the user's organizational unit is selected
+            // 3. Events that are global (no organizational units)
             $eventsQuery->where(function($query) use ($user) {
                 $query->where('user_id', $user->id)  // User's own events
                       ->orWhereHas('organizationalUnits', function($q) use ($user) {
                           // Check if user's organizational unit is in the event's organizational units
                           $q->where('organizational_units.id', $user->organizational_unit_id);
-                      });
+                      })
+                      ->orWhereDoesntHave('organizationalUnits'); // Global events (no organizational units)
             });
 
             $events = $eventsQuery->select(
@@ -85,7 +87,7 @@ class CalendarController extends Controller
                     if (isset($data['user_id'])) {
                         $data['user_id'] = (int)$data['user_id'];
                     }
-                    
+
                     // Get creator's role
                     $creator = User::find($data['user_id']);
                     $creatorRole = 'employee';
@@ -100,7 +102,7 @@ class CalendarController extends Controller
                             $creatorRole = 'employee';
                         }
                     }
-                    
+
                     // Hide details if event is private and user is not the owner
                     if ($data['private'] && $data['user_id'] !== $user->id) {
                         $data['title'] = 'Private Event';
@@ -293,6 +295,22 @@ class CalendarController extends Controller
 
             $user = auth()->user();
 
+            $color = '#616161'; // Default color for division employee
+            
+            switch($user->role) {
+                case 'admin':
+                    $color = '#33b679'; // Admin color
+                    break;
+                case 'sector_head':
+                    $color = '#039be5'; // Sector head color
+                    break;
+                case 'division_head':
+                    $color = '#e8b4bc'; // Division head color
+                    break;
+                default:
+                    $color = '#616161'; // Division employee color
+            }
+
             $event = Event::create([
                 'title' => $request->title,
                 'description' => $request->description,
@@ -302,13 +320,7 @@ class CalendarController extends Controller
                 'user_id' => auth()->id(),
                 'is_all_day' => $request->is_all_day ?? false,
                 'status' => $request->status ?? 'pending',
-                'color' => $user->division === 'institute' ? '#9caf88' : // Sage for admin sector head
-                          ($user->is_division_head ? '#e8b4bc' : // Lavender for division head
-                          ($user->organizationalUnit && $user->organizationalUnit->type === 'sector' &&
-                            (stripos($user->organizationalUnit->name, 'Research') !== false || stripos($user->organizationalUnit->name, 'Development') !== false)
-                            ? '#e8b4bc' // Flamingo for research/development sector head
-                            : ($user->organizationalUnit && $user->organizationalUnit->type === 'sector' ? '#9caf88' : // Sage for other sector heads
-                          ($user->organizationalUnit && $user->organizationalUnit->type === 'division' && !$user->is_division_head ? '#616161' : '#3b82f6')))), // Graphite for division employee
+                'color' => $color,
                 'private' => $request->boolean('private'),
                 'is_priority' => $request->boolean('is_priority'),
             ]);
@@ -392,28 +404,33 @@ class CalendarController extends Controller
 
             // Properly handle the is_all_day checkbox
             $isAllDay = filter_var($request->input('is_all_day', false), FILTER_VALIDATE_BOOLEAN);
-            
+
             // Set end_date to start_date if not provided
             $endDate = $request->end_date ?: $request->start_date;
 
             // Determine organizational units based on settings
             $organizationalUnitIds = [];
 
-            if ($request->boolean('is_global')) {
-                // For global events, don't associate with any specific unit
-                $organizationalUnitIds = [];
-            } else {
-                $user = auth()->user();
-                
-                // For division heads and employees, automatically use their organizational unit
-                if ($user->division !== 'institute') {
-                    if ($user->organizational_unit_id) {
-                        $organizationalUnitIds = [$user->organizational_unit_id];
+            // Important: Load existing organizational units from the pivot table first
+            $existingOrgUnitIds = $event->organizationalUnits->pluck('id')->toArray();
+
+            // Only change organizational units if they were actually included in the request
+            if ($request->has('is_global') || $request->has('organizational_unit_ids')) {
+                if ($request->boolean('is_global')) {
+                    // For global events, don't associate with any specific unit
+                    $organizationalUnitIds = [];
+                } else {
+                    // If not global and organizational unit ids are provided, use them
+                    if ($request->has('organizational_unit_ids')) {
+                        $organizationalUnitIds = $request->organizational_unit_ids ?: [];
+                    } else {
+                        // If no organizational units are provided, keep existing ones
+                        $organizationalUnitIds = $existingOrgUnitIds;
                     }
-                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
-                    // Only institute users can select organizational units
-                    $organizationalUnitIds = $request->organizational_unit_ids;
                 }
+            } else {
+                // If neither is_global nor organizational_unit_ids were provided, keep existing settings
+                $organizationalUnitIds = $existingOrgUnitIds;
             }
 
             // Check for overlapping priority events if this event is not a priority event
@@ -473,6 +490,23 @@ class CalendarController extends Controller
             }
 
             // Update event details
+            $user = auth()->user();
+            $color = '#616161'; // Default color for division employee
+            
+            switch($user->role) {
+                case 'admin':
+                    $color = '#33b679'; // Admin color
+                    break;
+                case 'sector_head':
+                    $color = '#039be5'; // Sector head color
+                    break;
+                case 'division_head':
+                    $color = '#e8b4bc'; // Division head color
+                    break;
+                default:
+                    $color = '#616161'; // Division employee color
+            }
+
             $event->update([
                 'title' => $request->title,
                 'description' => $request->description,
@@ -482,13 +516,11 @@ class CalendarController extends Controller
                 'is_all_day' => $isAllDay,
                 'private' => $request->boolean('private'),
                 'is_priority' => $request->boolean('is_priority'),
+                'color' => $color,
             ]);
 
             // Handle organizational units
-            if (!empty($organizationalUnitIds)) {
-                // Associate with selected or automatically determined organizational units
-                $event->organizationalUnits()->sync($organizationalUnitIds);
-            }
+            $event->organizationalUnits()->sync($organizationalUnitIds);
 
             // Handle guests update
             $guestEmails = json_decode($request->guests, true) ?? [];
@@ -669,7 +701,7 @@ class CalendarController extends Controller
                 $organizationalUnitIds = [];
             } else {
                 $user = auth()->user();
-                
+
                 if ($user->division !== 'institute') {
                     if ($user->organizational_unit_id) {
                         $organizationalUnitIds = [$user->organizational_unit_id];
@@ -773,7 +805,7 @@ class CalendarController extends Controller
                 $organizationalUnitIds = [];
             } else {
                 $user = auth()->user();
-                
+
                 if ($user->division !== 'institute') {
                     if ($user->organizational_unit_id) {
                         $organizationalUnitIds = [$user->organizational_unit_id];
@@ -977,7 +1009,7 @@ class CalendarController extends Controller
                                 ];
 
                                 $googleEvent = $this->googleCalendarService->createEvent($data);
-                                
+
                                 // Update the event with the new Google ID
                                 $event->google_event_id = $googleEvent->getId();
                                 $event->save();
@@ -1011,7 +1043,7 @@ class CalendarController extends Controller
                                     ];
 
                                     $googleEvent = $this->googleCalendarService->createEvent($data);
-                                    
+
                                     // Update the event with the new Google ID
                                     $event->google_event_id = $googleEvent->getId();
                                     $event->save();
@@ -1096,7 +1128,7 @@ class CalendarController extends Controller
             \Log::error('Error in sync process: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             // Check if this is an automatic sync
             $isAutomaticSync = !$request->ajax() && !$request->wantsJson();
             if ($isAutomaticSync) {

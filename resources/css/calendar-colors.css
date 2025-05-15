@@ -1,0 +1,34 @@
+:root {
+    /* User Role Colors */
+    --admin-sector-head-color: #33b679;
+    --research-sector-head-color: #039be5;
+    --development-sector-head-color: #039be5;
+    --division-head-color: #e8b4bc;
+    --division-employee-color: #616161;
+}
+
+/* Event color classes */
+.event-admin-sector-head {
+    background-color: var(--admin-sector-head-color) !important;
+    border-color: var(--admin-sector-head-color) !important;
+}
+
+.event-research-sector-head {
+    background-color: var(--research-sector-head-color) !important;
+    border-color: var(--research-sector-head-color) !important;
+}
+
+.event-development-sector-head {
+    background-color: var(--development-sector-head-color) !important;
+    border-color: var(--development-sector-head-color) !important;
+}
+
+.event-division-head {
+    background-color: var(--division-head-color) !important;
+    border-color: var(--division-head-color) !important;
+}
+
+.event-division-employee {
+    background-color: var(--division-employee-color) !important;
+    border-color: var(--division-employee-color) !important;
+} 

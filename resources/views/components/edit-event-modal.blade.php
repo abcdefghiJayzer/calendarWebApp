@@ -21,7 +21,7 @@
                             $user = auth()->user();
                             $userUnit = $user->organizationalUnit;
                             $isAdmin = $user->division === 'institute';
-                            
+
                             // Get all organizational units
                             $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
                             $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
@@ -29,8 +29,8 @@
 
                         <!-- Organizational Units Dropdown -->
                         <div class="relative">
-                            <button id="editOrganizationalUnitsButton" data-dropdown-toggle="editOrganizationalUnitsDropdown" 
-                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
+                            <button id="editOrganizationalUnitsButton" data-dropdown-toggle="editOrganizationalUnitsDropdown"
+                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between"
                                 type="button">
                                 <span id="editSelectedUnitsText">Select organizational units</span>
                                 <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
@@ -57,7 +57,7 @@
                                     @if($isAdmin || ($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin'))
                                     <li class="border-b border-gray-200 pb-2 mb-2">
                                         <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                            <input type="checkbox" name="is_global" id="edit-is_global" value="1" 
+                                            <input type="checkbox" name="is_global" id="edit-is_global" value="1"
                                                 class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                                             <label for="edit-is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
                                                 Global Event (Visible to Everyone)
@@ -72,8 +72,8 @@
                                             <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $sector->id }}"
                                                         id="edit-sector-{{ $sector->id }}"
                                                         class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -86,8 +86,8 @@
                                             @foreach($divisions->where('parent_id', $sector->id) as $division)
                                                 <li>
                                                     <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                        <input type="checkbox" 
-                                                            name="organizational_unit_ids[]" 
+                                                        <input type="checkbox"
+                                                            name="organizational_unit_ids[]"
                                                             value="{{ $division->id }}"
                                                             id="edit-division-{{ $division->id }}"
                                                             class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -105,8 +105,8 @@
                                             <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $sector->id }}"
                                                         id="edit-sector-{{ $sector->id }}"
                                                         class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -119,8 +119,8 @@
                                             @foreach($divisions->where('parent_id', $sector->id) as $division)
                                                 <li>
                                                     <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                        <input type="checkbox" 
-                                                            name="organizational_unit_ids[]" 
+                                                        <input type="checkbox"
+                                                            name="organizational_unit_ids[]"
                                                             value="{{ $division->id }}"
                                                             id="edit-division-{{ $division->id }}"
                                                             class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -137,8 +137,8 @@
                                         <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
                                         <li>
                                             <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
+                                                <input type="checkbox"
+                                                    name="organizational_unit_ids[]"
                                                     value="{{ $userUnit->id }}"
                                                     id="edit-sector-{{ $userUnit->id }}"
                                                     class="edit-sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -151,8 +151,8 @@
                                         @foreach($divisions->where('parent_id', $userUnit->id) as $division)
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $division->id }}"
                                                         id="edit-division-{{ $division->id }}"
                                                         class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -167,8 +167,8 @@
                                         <!-- Division Head and Employees can only see their division -->
                                         <li>
                                             <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
+                                                <input type="checkbox"
+                                                    name="organizational_unit_ids[]"
                                                     value="{{ $userUnit->id }}"
                                                     id="edit-division-{{ $userUnit->id }}"
                                                     class="edit-division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -357,7 +357,7 @@ window.openEditModal = function(event) {
     const isAdminSectorHead = "{{ auth()->user()->organizationalUnit->name ?? '' }}" === "Admin" && "{{ auth()->user()->organizationalUnit->type ?? '' }}" === "sector";
     const isDivisionHead = {{ auth()->user()->is_division_head ? 'true' : 'false' }};
     const isDivisionEmployee = !isAdmin && !isAdminSectorHead && !isDivisionHead;
-    
+
     // Set the form action with the event ID
     const form = document.getElementById('edit-event-form');
     form.action = `/OJT/calendarWebApp/events/${event.id}`;
@@ -482,24 +482,40 @@ window.openEditModal = function(event) {
     editGuests.forEach(email => createEditGuestTag(email));
 
     // Handle organizational units visibility
-    // Get organizational unit IDs from all possible locations in the data structure
-    const organizationalUnitIds = Array.isArray(event.organizational_unit_ids) ? event.organizational_unit_ids : 
-                                 (event.extendedProps && Array.isArray(event.extendedProps.organizational_unit_ids) ? 
-                                 event.extendedProps.organizational_unit_ids : []);
-                                 
+    // Get organizational unit IDs from the event data
+    let organizationalUnitIds = [];
+
+    // Try to get IDs from all possible sources in the event data structure
+    if (event.extendedProps && Array.isArray(event.extendedProps.organizational_unit_ids)) {
+        organizationalUnitIds = event.extendedProps.organizational_unit_ids;
+    } else if (Array.isArray(event.organizational_unit_ids)) {
+        organizationalUnitIds = event.organizational_unit_ids;
+    }
+
     // Convert all IDs to numbers for consistent comparison
     const numericOrgUnitIds = organizationalUnitIds.map(id => parseInt(id));
-    
+
     // Determine if event is global based on available data
-    const isGlobal = event.is_global || 
-                    (event.extendedProps && event.extendedProps.is_global) || 
-                    numericOrgUnitIds.length === 0;
-    
-    // Debug logging
+    const isGlobal = (event.extendedProps && event.extendedProps.is_global) ||
+                     event.is_global ||
+                     numericOrgUnitIds.length === 0;
+
     console.log('Event Data:', event);
     console.log('Organizational Unit IDs:', numericOrgUnitIds);
     console.log('Is Global:', isGlobal);
-    
+
+    // Set the is_global checkbox
+    const globalCheckbox = document.getElementById('edit-is_global');
+    if (globalCheckbox) {
+        globalCheckbox.checked = isGlobal;
+    }
+
+    // Toggle visibility of organizational units dropdown based on global setting
+    const orgUnitsContainer = document.getElementById('editOrganizationalUnitsContainer');
+    if (orgUnitsContainer) {
+        orgUnitsContainer.style.display = isGlobal ? 'none' : 'block';
+    }
+
     // For division employees and division heads, automatically set their division
     if (isDivisionEmployee || isDivisionHead) {
         const divisionCheckbox = document.querySelector('input[name="organizational_unit_ids[]"]');
@@ -507,37 +523,39 @@ window.openEditModal = function(event) {
             divisionCheckbox.checked = true;
             divisionCheckbox.disabled = true;
         }
-        // Hide the global checkbox if it exists
-        const globalCheckbox = document.getElementById('edit-is_global');
-        if (globalCheckbox) {
-            globalCheckbox.disabled = true;
-            globalCheckbox.checked = false;
-        }
     } else {
-        // For admin and admin sector head, handle normally
-        const globalCheckbox = document.getElementById('edit-is_global');
-        if (globalCheckbox) {
-            globalCheckbox.checked = isGlobal;
-            globalCheckbox.disabled = false;
+        // For admin users or sector heads, pre-select organizational units
+        if (!isGlobal) {
+            // Pre-select checkboxes based on the event's organizational unit IDs
+            document.querySelectorAll('input[name="organizational_unit_ids[]"]').forEach(checkbox => {
+                const checkboxId = parseInt(checkbox.value);
+                // Check if this unit ID is in the event's organizational units
+                checkbox.checked = numericOrgUnitIds.includes(checkboxId);
+
+                // If this is a sector checkbox, handle divisions accordingly
+                if (checkbox.classList.contains('edit-sector-checkbox')) {
+                    const sectorId = checkbox.dataset.sectorId;
+                    const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
+
+                    // If sector is checked, all its divisions should be disabled and considered checked
+                    if (checkbox.checked) {
+                        divisionCheckboxes.forEach(divCheckbox => {
+                            divCheckbox.disabled = true;
+                        });
+                    } else {
+                        // If sector not checked, enable divisions and check each if it's in the unit IDs
+                        divisionCheckboxes.forEach(divCheckbox => {
+                            const divId = parseInt(divCheckbox.value);
+                            divCheckbox.disabled = false;
+                            divCheckbox.checked = numericOrgUnitIds.includes(divId);
+                        });
+                    }
+                }
+            });
+
+            // After setting all checkboxes, update the displayed text
+            updateEditSelectedUnitsText();
         }
-
-        // Enable/disable org unit checkboxes based on global setting and set their checked state
-        document.querySelectorAll('input[name="organizational_unit_ids[]"]').forEach(checkbox => {
-            // Only disable if the event is global
-            checkbox.disabled = isGlobal;
-            
-            // Convert checkbox value to number for comparison
-            const checkboxValue = parseInt(checkbox.value);
-            
-            // Check if this organizational unit ID is in the array
-            checkbox.checked = numericOrgUnitIds.includes(checkboxValue);
-            
-            // Log for debugging
-            console.log(`Checkbox ${checkboxValue}: checked=${checkbox.checked}, in array=${numericOrgUnitIds.includes(checkboxValue)}`);
-        });
-
-        // Make sure to update the selected units display text
-        updateEditSelectedUnitsText();
     }
 
     // Update the selected units text
@@ -702,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isGlobalCheckbox = document.getElementById('edit-is_global');
             const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
             const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
-            
+
             if (!isGlobal && selectedUnits.length === 0) {
                 await Swal.fire({
                     icon: 'error',
@@ -732,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Handle priority event overlap
                 if (response.status === 422 && responseData.overlapping_events) {
                     let conflictHtml = 'This time slot overlaps with the following priority events:<br><br>';
-                    
+
                     responseData.overlapping_events.forEach(event => {
                         const startDate = new Date(event.start_date).toLocaleString();
                         const endDate = new Date(event.end_date).toLocaleString();
@@ -822,14 +840,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (globalCheckbox) {
         globalCheckbox.addEventListener('change', function() {
             const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
-            
+
             checkboxes.forEach(checkbox => {
                 checkbox.disabled = this.checked;
                 if (this.checked) {
                     checkbox.checked = false;
                 }
             });
-            
+
             updateEditSelectedUnitsText();
         });
     }
@@ -843,12 +861,12 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeEditDropdown() {
     const dropdownButton = document.getElementById('editOrganizationalUnitsButton');
     const dropdown = document.getElementById('editOrganizationalUnitsDropdown');
-    
+
     if (!dropdownButton || !dropdown) {
         console.error('Edit dropdown elements not found');
         return;
     }
-    
+
     dropdownButton.addEventListener('click', function(e) {
         e.preventDefault();
         dropdown.classList.toggle('hidden');
@@ -856,7 +874,7 @@ function initializeEditDropdown() {
 
     // Close dropdown when clicking outside
     document.addEventListener('click', function(event) {
-        if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') && 
+        if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') &&
             !dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
             dropdown.classList.add('hidden');
         }
@@ -870,29 +888,29 @@ function initializeEditCheckboxes() {
     if (globalCheckbox) {
         globalCheckbox.addEventListener('change', function() {
             const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
-            
+
             checkboxes.forEach(checkbox => {
                 checkbox.disabled = this.checked;
                 if (this.checked) {
                     checkbox.checked = false;
                 }
             });
-            
+
             updateEditSelectedUnitsText();
         });
     }
-    
+
     // Sector checkboxes
     document.querySelectorAll('.edit-sector-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             const sectorId = this.dataset.sectorId;
             const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
-            
+
             divisionCheckboxes.forEach(divCheckbox => {
                 divCheckbox.checked = this.checked;
                 divCheckbox.disabled = this.checked;
             });
-            
+
             updateEditSelectedUnitsText();
         });
     });
@@ -903,13 +921,13 @@ function initializeEditCheckboxes() {
             const sectorId = this.dataset.sectorId;
             const sectorCheckbox = document.querySelector(`.edit-sector-checkbox[data-sector-id="${sectorId}"]`);
             const divisionCheckboxes = document.querySelectorAll(`.edit-division-checkbox[data-sector-id="${sectorId}"]`);
-            
+
             if (sectorCheckbox) {
                 // If all divisions are checked, check the sector
                 const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
                 sectorCheckbox.checked = allChecked;
             }
-            
+
             updateEditSelectedUnitsText();
         });
     });
@@ -919,7 +937,7 @@ function updateEditSelectedUnitsText() {
     const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked:not(:disabled)');
     const selectedText = document.getElementById('editSelectedUnitsText');
     const isGlobalCheckbox = document.getElementById('edit-is_global');
-    
+
     if (isGlobalCheckbox && isGlobalCheckbox.checked) {
         selectedText.textContent = 'Global Event';
     } else if (selectedCheckboxes.length === 0) {

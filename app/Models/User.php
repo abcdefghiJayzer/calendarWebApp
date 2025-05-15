@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
         'division',
         'is_division_head',
         'organizational_unit_id',
@@ -84,5 +85,26 @@ class User extends Authenticatable
     public function organizationalUnit()
     {
         return $this->belongsTo(OrganizationalUnit::class);
+    }
+
+    // Role-related methods
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isSectorHead()
+    {
+        return $this->role === 'sector_head';
+    }
+
+    public function isDivisionHead()
+    {
+        return $this->role === 'division_head';
+    }
+
+    public function isEmployee()
+    {
+        return $this->role === 'employee';
     }
 }

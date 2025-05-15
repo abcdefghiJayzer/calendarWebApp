@@ -14,24 +14,30 @@
                 @csrf
                 @php
                     // Define color variables
+                    $adminColor = '#33b679';
+                    $sectoralHeadColor = '#039be5';
+                    $divisionHeadColor = '#e8b4bc';
                     $divisionEmployeeColor = '#616161';
-                    $adminColor = '#2563eb'; // blue-600
-                    $sectorHeadColor = '#059669'; // emerald-600
-                    $divisionHeadColor = '#7c3aed'; // violet-600
                     
-                    // Determine user type and set appropriate color
+                    // Get user and determine color based on role
                     $user = auth()->user();
-                    $userUnit = $user->organizationalUnit;
-                    $isAdmin = $user->is_admin;
-                    $isSectorHead = $userUnit && $userUnit->type === 'sector';
-                    $isDivisionHead = $userUnit && $userUnit->type === 'division' && $user->is_division_head;
-                    $isDivisionEmployee = $userUnit && $userUnit->type === 'division' && !$user->is_division_head;
                     
-                    // Set default color based on user type
-                    $defaultColor = $isAdmin ? $adminColor : 
-                                  ($isSectorHead ? $sectorHeadColor : 
-                                  ($isDivisionHead ? $divisionHeadColor : 
-                                  ($isDivisionEmployee ? $divisionEmployeeColor : $adminColor)));
+                    // Set default color based on user role
+                    $defaultColor = $divisionEmployeeColor; // default color
+                    
+                    switch($user->role) {
+                        case 'admin':
+                            $defaultColor = $adminColor;
+                            break;
+                        case 'sector_head':
+                            $defaultColor = $sectoralHeadColor;
+                            break;
+                        case 'division_head':
+                            $defaultColor = $divisionHeadColor;
+                            break;
+                        default:
+                            $defaultColor = $divisionEmployeeColor;
+                    }
                 @endphp
 
                 <!-- Hidden color input -->
@@ -308,10 +314,10 @@
 <script>
     // Add color variables to JavaScript
     const COLORS = {
-        divisionEmployee: '#616161',
-        admin: '#2563eb',
-        sectorHead: '#059669',
-        divisionHead: '#7c3aed'
+        admin: '#33b679',
+        sectoralHead: '#039be5',
+        divisionHead: '#e8b4bc',
+        divisionEmployee: '#616161'
     };
 
     let guests = [];
@@ -321,22 +327,23 @@
         modal.classList.remove('translate-x-full');
         document.getElementById('calendar-container').classList.add('mr-120');
 
-        // Set the color based on user type
-        const userUnit = "{{ auth()->user()->organizationalUnit->type ?? '' }}";
-        const isDivisionEmployee = userUnit === 'division' && !{{ auth()->user()->is_division_head ? 'true' : 'false' }};
-        const isDivisionHead = userUnit === 'division' && {{ auth()->user()->is_division_head ? 'true' : 'false' }};
-        const isSectorHead = userUnit === 'sector';
-        const isAdmin = {{ auth()->user()->is_admin ? 'true' : 'false' }};
+        // Set the color based on user's role
+        const userRole = "{{ auth()->user()->role }}";
+        
+        let color = COLORS.divisionEmployee; // default color
 
-        let color = COLORS.admin; // default color
-        if (isDivisionEmployee) {
-            color = COLORS.divisionEmployee;
-        } else if (isDivisionHead) {
-            color = COLORS.divisionHead;
-        } else if (isSectorHead) {
-            color = COLORS.sectorHead;
-        } else if (isAdmin) {
-            color = COLORS.admin;
+        switch(userRole) {
+            case 'admin':
+                color = COLORS.admin;
+                break;
+            case 'sector_head':
+                color = COLORS.sectoralHead;
+                break;
+            case 'division_head':
+                color = COLORS.divisionHead;
+                break;
+            default:
+                color = COLORS.divisionEmployee;
         }
 
         document.getElementById('event-color').value = color;

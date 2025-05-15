@@ -29,16 +29,16 @@ class EventSeeder extends Seeder
         $adminSector = OrganizationalUnit::where('type', 'sector')->where('name', 'Admin')->first();
         $sectors = OrganizationalUnit::where('type', 'sector')->where('name', '!=', 'Admin')->get();
         $divisions = OrganizationalUnit::where('type', 'division')->get();
-        
+
         // Get users
         $users = User::all();
-        
-        // Role-based colors
+
+        // Define color scheme for different user roles
         $colors = [
-            'admin' => '#33b679',
-            'sectoral' => '#039be5',
-            'division_head' => '#7986cb',
-            'employee' => '#616161'
+            'admin' => '#33b679',       // Admin - Green color from request
+            'sectoral' => '#039be5',    // Research Sector head - Blue color from request
+            'division_head' => '#e8b4bc', // Division head - Pink color from request
+            'employee' => '#616161'     // Division employee - Gray color from request
         ];
 
         // Global events (visible to everyone)
