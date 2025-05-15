@@ -21,7 +21,8 @@ class Event extends Model
         'status',
         'visibility',
         'private',
-        'google_event_id'
+        'google_event_id',
+        'is_priority'
     ];
 
     // In App\Models\Event.php

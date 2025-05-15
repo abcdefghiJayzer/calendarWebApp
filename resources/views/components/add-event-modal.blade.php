@@ -257,20 +257,37 @@
                         class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                 </div>
 
-                <div class="flex items-center space-x-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="hidden" name="is_all_day" value="0">
-                        <input type="checkbox" name="is_all_day" id="is_all_day" value="1" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <input type="checkbox" name="is_all_day" id="is-all-day" value="1" class="sr-only peer">
+                        <div class="relative w-12 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 transition-colors duration-200">
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 peer-checked:translate-x-6"></div>
+                        </div>
                         <span class="ml-3 text-sm font-medium text-gray-700">All Day Event</span>
                     </label>
 
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="hidden" name="private" value="0">
                         <input type="checkbox" name="private" id="private" value="1" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div class="relative w-12 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 transition-colors duration-200">
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 peer-checked:translate-x-6"></div>
+                        </div>
                         <span class="ml-3 text-sm font-medium text-gray-700">Private Event</span>
                     </label>
+
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="hidden" name="is_priority" value="0">
+                        <input type="checkbox" name="is_priority" id="is-priority" value="1" class="sr-only peer">
+                        <div class="relative w-12 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 transition-colors duration-200">
+                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 peer-checked:translate-x-6"></div>
+                        </div>
+                        <span class="ml-3 text-sm font-medium text-gray-700">Priority Event</span>
+                    </label>
+                </div>
+
+                <div class="text-xs text-gray-500 mt-1">
+                    <strong>Priority Event:</strong> When enabled, this event will prevent other events from being created in the same time slot for the selected organizational units.
                 </div>
 
                 <div class="flex justify-end space-x-3 pt-4">
@@ -519,7 +536,7 @@
                     await Swal.fire({
                         icon: 'error',
                         title: 'Invalid Email',
-                        text: 'Please enter a valid email address',
+                        text: 'Please enter a valid email address for the guest',
                         confirmButtonColor: '#22c55e'
                     });
                     return;
@@ -527,121 +544,119 @@
             }
 
             // Check if at least one organizational unit is selected or global is checked
-            const isGlobal = document.getElementById('is_global') ? document.getElementById('is_global').checked : false;
+            const isGlobalCheckbox = document.getElementById('is_global');
+            const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
             const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
             
             if (!isGlobal && selectedUnits.length === 0) {
                 await Swal.fire({
                     icon: 'error',
-                    title: 'Selection Required',
-                    text: 'Please select at least one organizational unit or mark the event as global',
+                    title: 'Visibility Required',
+                    text: 'Please select at least one organizational unit or mark as global event',
                     confirmButtonColor: '#22c55e'
                 });
                 return;
             }
 
             const formData = new FormData(this);
-            formData.set('is_global', isGlobal ? '1' : '0');  // Explicitly set is_global as string '1' or '0'
 
-            // Add selected organizational units
-            if (!isGlobal && selectedUnits.length > 0) {
-                selectedUnits.forEach(unit => {
-                    formData.append('organizational_unit_ids[]', unit.value);
-                });
-            }
+            // Submit the form
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
 
-            // Check for guest scheduling conflicts
-            if (guests.length > 0) {
-                const startDate = document.getElementById('start_date').value;
-                const endDate = document.getElementById('end_date').value || startDate;
+            const responseData = await response.json();
 
-                const checkData = new URLSearchParams();
-                checkData.append('guests', JSON.stringify(guests));
-                checkData.append('start_date', startDate);
-                checkData.append('end_date', endDate);
-                checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
-
-                const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
-                    method: 'POST',
-                    body: checkData,
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                });
-
-                const conflictResult = await checkResponse.json();
-
-                if (conflictResult.conflicts && conflictResult.conflicts.length > 0) {
-                    let conflictHtml = 'The following guests have scheduling conflicts:<br><br>';
-
-                    conflictResult.conflicts.forEach(conflict => {
-                        conflictHtml += `<strong>${conflict.email}</strong> has conflicts with:<br>`;
-
-                        conflict.events.forEach(event => {
-                            const startDate = new Date(event.start).toLocaleString();
-                            const endDate = new Date(event.end).toLocaleString();
-                            conflictHtml += `- <b>${event.title}</b><br>`;
-                            conflictHtml += `&nbsp;&nbsp;From: ${startDate}<br>`;
-                            conflictHtml += `&nbsp;&nbsp;To: ${endDate}<br>`;
-                        });
-
+            if (!response.ok) {
+                // Handle priority event overlap
+                if (response.status === 422 && responseData.overlapping_events) {
+                    let conflictHtml = 'This time slot overlaps with the following priority events:<br><br>';
+                    
+                    responseData.overlapping_events.forEach(event => {
+                        const startDate = new Date(event.start_date).toLocaleString();
+                        const endDate = new Date(event.end_date).toLocaleString();
+                        conflictHtml += `<strong>${event.title}</strong><br>`;
+                        conflictHtml += `From: ${startDate}<br>`;
+                        conflictHtml += `To: ${endDate}<br>`;
+                        if (event.organizational_units && event.organizational_units.length > 0) {
+                            conflictHtml += `Organizational Units: ${event.organizational_units.join(', ')}<br>`;
+                        }
                         conflictHtml += '<br>';
                     });
 
                     const result = await Swal.fire({
-                        title: 'Schedule Conflict Detected',
+                        title: 'Priority Event Conflict',
                         html: conflictHtml,
                         icon: 'warning',
                         showCancelButton: true,
+                        showDenyButton: true,
                         confirmButtonColor: '#22c55e',
+                        denyButtonColor: '#3b82f6',
                         cancelButtonColor: '#ef4444',
-                        confirmButtonText: 'Add anyway',
+                        confirmButtonText: 'Proceed anyway',
+                        denyButtonText: 'Edit',
                         cancelButtonText: 'Cancel'
                     });
 
-                    if (!result.isConfirmed) {
-                        return; // Just return without closing the modal
+                    if (result.isConfirmed) {
+                        // Proceed with event creation despite conflicts
+                        formData.append('force_create', 'true');
+                        const retryResponse = await fetch(this.action, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        });
+                        
+                        if (retryResponse.ok) {
+                            await Swal.fire({
+                                icon: 'success',
+                                title: 'Success',
+                                text: 'Event created successfully!',
+                                confirmButtonColor: '#22c55e'
+                            });
+                            closeModal();
+                            window.location.reload();
+                        } else {
+                            throw new Error('Failed to create event');
+                        }
+                    } else if (result.isDenied) {
+                        // Return to form for editing
+                        return;
+                    } else {
+                        // Cancel event creation
+                        return;
                     }
+                } else {
+                    throw new Error(responseData.error || 'Failed to create event');
                 }
             }
 
-            // Proceed with event creation
-            const response = await fetch(`${window.baseUrl}/events`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+            await Swal.fire({
+                icon: 'success',
+                title: 'Success',
+                text: 'Event created successfully!',
+                confirmButtonColor: '#22c55e'
             });
 
-            const result = await response.json();
-
-            if (response.ok) {
-                closeModal();
-                if (window.calendar) {
-                    window.calendar.refetchEvents();
-                }
-
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success',
-                    text: result.message || 'Event created successfully!',
-                    confirmButtonColor: '#22c55e'
-                });
-            } else {
-                throw new Error(result.message || result.error || 'Failed to create event');
-            }
+            closeModal();
+            window.location.reload();
 
         } catch (error) {
             console.error('Error:', error);
-
-            Swal.fire({
+            await Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'There was a problem creating the event',
+                text: error.message || 'An error occurred while creating the event',
                 confirmButtonColor: '#22c55e'
             });
         }

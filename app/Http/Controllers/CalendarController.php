@@ -50,44 +50,18 @@ class CalendarController extends Controller
                 'org_unit_id' => $user->organizational_unit_id
             ]);
 
-            $userOrganizationalUnitId = $user->organizational_unit_id;
-
             // Start with a base query
             $eventsQuery = Event::with(['participants', 'organizationalUnits']);
 
             // Show events that are either:
             // 1. Created by the user
-            // 2. Associated with the user's organizational unit
-            // 3. Global events
-            $eventsQuery->where(function($query) use ($user, $userOrganizationalUnitId) {
-                $query->where('user_id', $user->id)
-                    ->orWhere(function($q) use ($user, $userOrganizationalUnitId) {
-                        // Institute users can see all events
-                        if ($user->division === 'institute') {
-                            return;
-                        }
-
-                        // Get user's organizational unit and its parent
-                        $userUnit = $user->organizationalUnit;
-                        $parentUnitId = $userUnit ? $userUnit->parent_id : null;
-
-                        // Show events that are:
-                        // 1. Global (institute-wide)
-                        // 2. Visible to the user's organizational unit
-                        // 3. Visible to the user's parent sector (if user is in a division)
-                        // 4. Visible to any organizational unit the user belongs to
-                        $q->where('visibility', 'institute')
-                          ->orWhere('visibility', $userOrganizationalUnitId)
-                          ->orWhere(function($subQuery) use ($parentUnitId) {
-                              if ($parentUnitId) {
-                                  $subQuery->where('visibility', $parentUnitId);
-                              }
-                          })
-                          ->orWhereHas('organizationalUnits', function($subQuery) use ($userOrganizationalUnitId, $parentUnitId) {
-                              $subQuery->where('organizational_units.id', $userOrganizationalUnitId)
-                                     ->orWhere('organizational_units.id', $parentUnitId);
-                          });
-                    });
+            // 2. Events where the user's organizational unit is selected
+            $eventsQuery->where(function($query) use ($user) {
+                $query->where('user_id', $user->id)  // User's own events
+                      ->orWhereHas('organizationalUnits', function($q) use ($user) {
+                          // Check if user's organizational unit is in the event's organizational units
+                          $q->where('organizational_units.id', $user->organizational_unit_id);
+                      });
             });
 
             $events = $eventsQuery->select(
@@ -100,8 +74,7 @@ class CalendarController extends Controller
                 'description',
                 'is_all_day as allDay',
                 'private',
-                'user_id',
-                'visibility'
+                'user_id'
             )->get();
 
             \Log::info('Found events', ['count' => $events->count()]);
@@ -149,8 +122,7 @@ class CalendarController extends Controller
                             'user_id' => (int)$data['user_id'],
                             'organizational_unit_ids' => $event->organizationalUnits->pluck('id')->toArray(),
                             'organizational_unit_names' => $event->organizationalUnits->pluck('name')->toArray(),
-                            'visibility' => $data['visibility'],
-                            'is_global' => $data['visibility'] === 'institute',
+                            'is_global' => $event->organizationalUnits->isEmpty(), // Event is global if no org units are selected
                             'visible_to_organizational_units' => $event->organizationalUnits->pluck('id')->toArray(),
                             'creator_role' => $creatorRole
                         ];
@@ -189,11 +161,6 @@ class CalendarController extends Controller
             return response()->json(['error' => 'Event not found'], 404);
         }
 
-        // Check if the event is global (no specific visibility)
-        $isGlobal = $event->organizationalUnits->isEmpty();
-        $organizationalUnitIds = $event->organizationalUnits->pluck('id')->toArray();
-        $organizationalUnitNames = $event->organizationalUnits->pluck('name')->toArray();
-
         // Get creator's role
         $creator = User::find($event->user_id);
         $creatorRole = 'employee';
@@ -207,6 +174,13 @@ class CalendarController extends Controller
             }
         }
 
+        // Get organizational unit IDs and names
+        $organizationalUnitIds = $event->organizationalUnits->pluck('id')->toArray();
+        $organizationalUnitNames = $event->organizationalUnits->pluck('name')->toArray();
+
+        // Determine if event is global (no organizational units)
+        $isGlobal = empty($organizationalUnitIds);
+
         return response()->json([
             'id' => $event->id,
             'title' => $event->title,
@@ -219,18 +193,20 @@ class CalendarController extends Controller
             'private' => $event->private,
             'user_id' => $event->user_id,
             'guests' => $event->participants->pluck('email'),
-            'is_global' => $event->visibility === 'institute',
+            'is_global' => $isGlobal,
             'organizational_unit_ids' => $organizationalUnitIds,
+            'organizational_unit_names' => $organizationalUnitNames,
+            'is_priority' => $event->is_priority,
             'extendedProps' => [
                 'description' => $event->description,
                 'location' => $event->location,
                 'guests' => $event->participants->pluck('email'),
                 'private' => $event->private,
                 'user_id' => $event->user_id,
-                'is_global' => $event->visibility === 'institute',
+                'is_global' => $isGlobal,
                 'organizational_unit_ids' => $organizationalUnitIds,
                 'organizational_unit_names' => $organizationalUnitNames,
-                'visibility' => $event->visibility,
+                'is_priority' => $event->is_priority,
                 'creator_role' => $creatorRole
             ]
         ]);
@@ -255,6 +231,7 @@ class CalendarController extends Controller
                 'guests' => 'nullable|string', // JSON string of guest emails
                 'is_all_day' => 'nullable|boolean',
                 'is_global' => 'nullable|boolean',
+                'is_priority' => 'boolean',
                 'organizational_unit_ids' => 'nullable|array',
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
@@ -262,33 +239,60 @@ class CalendarController extends Controller
             // Set end_date to start_date if not provided
             $endDate = $request->end_date ?: $request->start_date;
 
-            // Determine visibility based on settings
-            $visibility = 'institute'; // Default to institute-wide
+            // Get the selected organizational units from the dropdown
             $organizationalUnitIds = [];
-
-            if ($request->boolean('is_global')) {
-                $visibility = 'institute'; // Global events are institute-wide
-                $organizationalUnitIds = []; // No organizational units for global events
-            } else {
+            if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                $organizationalUnitIds = $request->organizational_unit_ids;
+            } else if (!$request->boolean('is_global')) {
+                // If no units selected and not global, use user's organizational unit
                 $user = auth()->user();
-                
-                // For division heads and employees, automatically use their organizational unit
-                if ($user->division !== 'institute') {
-                    if ($user->organizational_unit_id) {
-                        $visibility = $user->organizational_unit_id;
-                        $organizationalUnitIds = [$user->organizational_unit_id];
-                    }
-                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
-                    // Only institute users can select organizational units
-                    $visibility = $request->organizational_unit_ids[0];
-                    $organizationalUnitIds = $request->organizational_unit_ids;
+                if ($user->organizational_unit_id) {
+                    $organizationalUnitIds = [$user->organizational_unit_id];
                 }
             }
 
-            // Get the authenticated user
+            // Check for overlapping priority events if this event is not a priority event
+            if (!$request->boolean('is_priority')) {
+                $overlappingEvents = Event::where('is_priority', true)
+                    ->where(function ($query) use ($request) {
+                        $query->whereBetween('start_date', [$request->start_date, $request->end_date])
+                            ->orWhereBetween('end_date', [$request->start_date, $request->end_date])
+                            ->orWhere(function ($q) use ($request) {
+                                $q->where('start_date', '<=', $request->start_date)
+                                    ->where('end_date', '>=', $request->end_date);
+                            });
+                    });
+
+                // Check for overlaps in the selected organizational units
+                if (!empty($organizationalUnitIds)) {
+                    $overlappingEvents->whereHas('organizationalUnits', function ($q) use ($organizationalUnitIds) {
+                        $q->whereIn('organizational_units.id', $organizationalUnitIds);
+                    });
+                } else {
+                    // For global events, check all priority events
+                    $overlappingEvents->whereDoesntHave('organizationalUnits');
+                }
+
+                $overlappingEvents = $overlappingEvents->get();
+
+                if ($overlappingEvents->isNotEmpty()) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'This time slot overlaps with priority events. Please choose a different time or contact the event organizers.',
+                        'overlapping_events' => $overlappingEvents->map(function ($event) {
+                            return [
+                                'title' => $event->title,
+                                'start_date' => $event->start_date,
+                                'end_date' => $event->end_date,
+                                'organizational_units' => $event->organizationalUnits->pluck('name')
+                            ];
+                        })
+                    ], 422);
+                }
+            }
+
             $user = auth()->user();
 
-            // Create the event with default color
             $event = Event::create([
                 'title' => $request->title,
                 'description' => $request->description,
@@ -306,15 +310,11 @@ class CalendarController extends Controller
                             : ($user->organizationalUnit && $user->organizationalUnit->type === 'sector' ? '#9caf88' : // Sage for other sector heads
                           ($user->organizationalUnit && $user->organizationalUnit->type === 'division' && !$user->is_division_head ? '#616161' : '#3b82f6')))), // Graphite for division employee
                 'private' => $request->boolean('private'),
-                'visibility' => $visibility,
+                'is_priority' => $request->boolean('is_priority'),
             ]);
 
-            // Handle organizational units
-            if ($request->boolean('is_global')) {
-                // For global events, don't associate with any specific unit
-                $event->organizationalUnits()->detach();
-            } else if (!empty($organizationalUnitIds)) {
-                // Associate with selected or automatically determined organizational units
+            // Associate the event with the selected organizational units
+            if (!empty($organizationalUnitIds)) {
                 $event->organizationalUnits()->sync($organizationalUnitIds);
             }
 
@@ -385,6 +385,7 @@ class CalendarController extends Controller
                 'location' => 'nullable|string|max:255',
                 'is_all_day' => 'boolean',
                 'is_global' => 'nullable|boolean',
+                'is_priority' => 'boolean',
                 'organizational_unit_ids' => 'nullable|array',
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
@@ -395,25 +396,79 @@ class CalendarController extends Controller
             // Set end_date to start_date if not provided
             $endDate = $request->end_date ?: $request->start_date;
 
-            // Determine visibility based on settings
-            $visibility = 'institute'; // Default to institute-wide
+            // Determine organizational units based on settings
             $organizationalUnitIds = [];
 
             if ($request->boolean('is_global')) {
-                $visibility = 'institute'; // Global events are institute-wide
+                // For global events, don't associate with any specific unit
+                $organizationalUnitIds = [];
             } else {
                 $user = auth()->user();
                 
                 // For division heads and employees, automatically use their organizational unit
                 if ($user->division !== 'institute') {
                     if ($user->organizational_unit_id) {
-                        $visibility = $user->organizational_unit_id;
                         $organizationalUnitIds = [$user->organizational_unit_id];
                     }
                 } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
                     // Only institute users can select organizational units
-                    $visibility = $request->organizational_unit_ids[0];
                     $organizationalUnitIds = $request->organizational_unit_ids;
+                }
+            }
+
+            // Check for overlapping priority events if this event is not a priority event
+            if (!$request->boolean('is_priority')) {
+                $overlappingEvents = Event::where('is_priority', true)
+                    ->where(function ($query) use ($request) {
+                        $query->whereBetween('start_date', [$request->start_date, $request->end_date])
+                            ->orWhereBetween('end_date', [$request->start_date, $request->end_date])
+                            ->orWhere(function ($q) use ($request) {
+                                $q->where('start_date', '<=', $request->start_date)
+                                    ->where('end_date', '>=', $request->end_date);
+                            });
+                    });
+
+                // Get user's organizational unit and its parent sector
+                $user = auth()->user();
+                $userUnit = $user->organizationalUnit;
+                $userSectorId = $userUnit ? $userUnit->parent_id : null;
+
+                // Build the visibility conditions
+                $overlappingEvents->where(function ($query) use ($user, $userUnit, $userSectorId, $organizationalUnitIds) {
+                    // Check for events with no organizational units (global events)
+                    $query->whereDoesntHave('organizationalUnits');
+
+                    // If user is in a division, check their division and sector
+                    if ($userUnit) {
+                        $query->orWhereHas('organizationalUnits', function ($q) use ($userUnit, $userSectorId) {
+                            $q->where('organizational_units.id', $userUnit->id)
+                              ->orWhere('organizational_units.id', $userSectorId);
+                        });
+                    }
+
+                    // If specific organizational units are selected, check those
+                    if (!empty($organizationalUnitIds)) {
+                        $query->orWhereHas('organizationalUnits', function ($q) use ($organizationalUnitIds) {
+                            $q->whereIn('organizational_units.id', $organizationalUnitIds);
+                        });
+                    }
+                });
+
+                $overlappingEvents = $overlappingEvents->get();
+
+                if ($overlappingEvents->isNotEmpty()) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'This time slot overlaps with priority events. Please choose a different time or contact the event organizers.',
+                        'overlapping_events' => $overlappingEvents->map(function ($event) {
+                            return [
+                                'title' => $event->title,
+                                'start_date' => $event->start_date,
+                                'end_date' => $event->end_date,
+                                'organizational_units' => $event->organizationalUnits->pluck('name')
+                            ];
+                        })
+                    ], 422);
                 }
             }
 
@@ -426,15 +481,12 @@ class CalendarController extends Controller
                 'location' => $request->location,
                 'is_all_day' => $isAllDay,
                 'private' => $request->boolean('private'),
-                'visibility' => $visibility,
+                'is_priority' => $request->boolean('is_priority'),
             ]);
 
             // Handle organizational units
-            if ($request->boolean('is_global')) {
-                // For global events, detach all organizational units
-                $event->organizationalUnits()->detach();
-            } else if (!empty($organizationalUnitIds)) {
-                // Sync with selected organizational units
+            if (!empty($organizationalUnitIds)) {
+                // Associate with selected or automatically determined organizational units
                 $event->organizationalUnits()->sync($organizationalUnitIds);
             }
 
@@ -609,18 +661,22 @@ class CalendarController extends Controller
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
 
-            // Determine visibility based on settings
-            $visibility = 'institute'; // Default to institute-wide
+            // Determine organizational units based on settings
+            $organizationalUnitIds = [];
+
             if ($request->boolean('is_global')) {
-                $visibility = 'institute'; // Global events are institute-wide
-            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
-                // Use the first organizational unit ID as visibility
-                $visibility = $request->organizational_unit_ids[0];
+                // For global events, don't associate with any specific unit
+                $organizationalUnitIds = [];
             } else {
-                // Use user's organizational unit as visibility
                 $user = auth()->user();
-                if ($user->organizational_unit_id) {
-                    $visibility = $user->organizational_unit_id;
+                
+                if ($user->division !== 'institute') {
+                    if ($user->organizational_unit_id) {
+                        $organizationalUnitIds = [$user->organizational_unit_id];
+                    }
+                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                    // Only institute users can select organizational units
+                    $organizationalUnitIds = $request->organizational_unit_ids;
                 }
             }
 
@@ -647,25 +703,15 @@ class CalendarController extends Controller
                 'color' => $data['color'],
                 'user_id' => auth()->id(),
                 'is_all_day' => $request->is_all_day ?? false,
-                'visibility' => $visibility,
+                'visibility' => 'institute',
                 'private' => $request->boolean('private'),
                 'google_event_id' => $googleEvent->id
             ]);
 
             // Handle organizational units
-            if ($request->boolean('is_global')) {
-                // For global events, don't associate with any specific unit
-                // They will be visible to everyone
-                $event->organizationalUnits()->detach();
-            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
-                // Associate with selected organizational units
-                $event->organizationalUnits()->sync($request->organizational_unit_ids);
-            } else {
-                // Default to user's organizational unit if nothing selected
-                $userOrgUnitId = auth()->user()->organizational_unit_id;
-                if ($userOrgUnitId) {
-                    $event->organizationalUnits()->sync([$userOrgUnitId]);
-                }
+            if (!empty($organizationalUnitIds)) {
+                // Associate with selected or automatically determined organizational units
+                $event->organizationalUnits()->sync($organizationalUnitIds);
             }
 
             return response()->json([
@@ -719,18 +765,22 @@ class CalendarController extends Controller
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
             ]);
 
-            // Determine visibility based on settings
-            $visibility = 'institute'; // Default to institute-wide
+            // Determine organizational units based on settings
+            $organizationalUnitIds = [];
+
             if ($request->boolean('is_global')) {
-                $visibility = 'institute'; // Global events are institute-wide
-            } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
-                // Use the first organizational unit ID as visibility
-                $visibility = $request->organizational_unit_ids[0];
+                // For global events, don't associate with any specific unit
+                $organizationalUnitIds = [];
             } else {
-                // Use user's organizational unit as visibility
                 $user = auth()->user();
-                if ($user->organizational_unit_id) {
-                    $visibility = $user->organizational_unit_id;
+                
+                if ($user->division !== 'institute') {
+                    if ($user->organizational_unit_id) {
+                        $organizationalUnitIds = [$user->organizational_unit_id];
+                    }
+                } else if ($request->has('organizational_unit_ids') && !empty($request->organizational_unit_ids)) {
+                    // Only institute users can select organizational units
+                    $organizationalUnitIds = $request->organizational_unit_ids;
                 }
             }
 
@@ -761,22 +811,13 @@ class CalendarController extends Controller
                     'end_date' => $data['end_date'],
                     'location' => $data['location'],
                     'color' => $data['color'],
-                    'visibility' => $visibility,
+                    'visibility' => 'institute',
                 ]);
 
                 // Handle organizational units
-                if ($request->boolean('is_global')) {
-                    // For global events, detach all organizational units
-                    $localEvent->organizationalUnits()->detach();
-                } else if ($request->has('organizational_unit_ids')) {
-                    // Sync with selected organizational units
-                    $localEvent->organizationalUnits()->sync($request->organizational_unit_ids);
-                } else {
-                    // Default to user's organizational unit if nothing selected
-                    $userOrgUnitId = auth()->user()->organizational_unit_id;
-                    if ($userOrgUnitId) {
-                        $localEvent->organizationalUnits()->sync([$userOrgUnitId]);
-                    }
+                if (!empty($organizationalUnitIds)) {
+                    // Associate with selected or automatically determined organizational units
+                    $localEvent->organizationalUnits()->sync($organizationalUnitIds);
                 }
             }
 
