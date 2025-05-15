@@ -38,9 +38,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth'
                 },
                 dateClick: function (info) {
+                    // Create dates in local timezone
                     const startDate = new Date(info.date);
                     const endDate = new Date(info.date);
-                    endDate.setHours(startDate.getHours() + 1); // Set end date 1 hour after start
+                    
+                    // Set to start of day
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate.setHours(1, 0, 0, 0); // Set end date 1 hour after start
+                    
                     if (typeof openModal === 'function') {
                         openModal(startDate, endDate);
                     } else {

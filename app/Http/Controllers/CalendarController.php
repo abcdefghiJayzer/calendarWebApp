@@ -236,6 +236,8 @@ class CalendarController extends Controller
                 'is_priority' => 'boolean',
                 'organizational_unit_ids' => 'nullable|array',
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
+                'force_create' => 'nullable|boolean', // New parameter to force creation despite overlaps
+                'force_update' => 'nullable|boolean', // Alternative parameter name used in blade template
             ]);
 
             // Set end_date to start_date if not provided
@@ -277,7 +279,7 @@ class CalendarController extends Controller
 
                 $overlappingEvents = $overlappingEvents->get();
 
-                if ($overlappingEvents->isNotEmpty()) {
+                if ($overlappingEvents->isNotEmpty() && !$request->boolean('force_create') && !$request->boolean('force_update')) {
                     return response()->json([
                         'success' => false,
                         'error' => 'This time slot overlaps with priority events. Please choose a different time or contact the event organizers.',
@@ -288,7 +290,8 @@ class CalendarController extends Controller
                                 'end_date' => $event->end_date,
                                 'organizational_units' => $event->organizationalUnits->pluck('name')
                             ];
-                        })
+                        })->toArray(),
+                        'can_force_create' => true
                     ], 422);
                 }
             }
@@ -379,7 +382,7 @@ class CalendarController extends Controller
     {
         try {
             $event = Event::findOrFail($id);
-
+            
             // Check ownership
             if (auth()->user()->division !== 'institute' && auth()->id() !== $event->user_id) {
                 return response()->json([
@@ -400,6 +403,7 @@ class CalendarController extends Controller
                 'is_priority' => 'boolean',
                 'organizational_unit_ids' => 'nullable|array',
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
+                'force_update' => 'nullable|boolean',
             ]);
 
             // Properly handle the is_all_day checkbox
@@ -433,9 +437,10 @@ class CalendarController extends Controller
                 $organizationalUnitIds = $existingOrgUnitIds;
             }
 
-            // Check for overlapping priority events if this event is not a priority event
-            if (!$request->boolean('is_priority')) {
+            // Check for overlapping priority events ONLY if not a priority event AND not forcing update
+            if (!$request->boolean('is_priority') && !$request->boolean('force_update')) {
                 $overlappingEvents = Event::where('is_priority', true)
+                    ->where('id', '!=', $id) // Exclude current event
                     ->where(function ($query) use ($request) {
                         $query->whereBetween('start_date', [$request->start_date, $request->end_date])
                             ->orWhereBetween('end_date', [$request->start_date, $request->end_date])
@@ -445,31 +450,15 @@ class CalendarController extends Controller
                             });
                     });
 
-                // Get user's organizational unit and its parent sector
-                $user = auth()->user();
-                $userUnit = $user->organizationalUnit;
-                $userSectorId = $userUnit ? $userUnit->parent_id : null;
-
-                // Build the visibility conditions
-                $overlappingEvents->where(function ($query) use ($user, $userUnit, $userSectorId, $organizationalUnitIds) {
-                    // Check for events with no organizational units (global events)
-                    $query->whereDoesntHave('organizationalUnits');
-
-                    // If user is in a division, check their division and sector
-                    if ($userUnit) {
-                        $query->orWhereHas('organizationalUnits', function ($q) use ($userUnit, $userSectorId) {
-                            $q->where('organizational_units.id', $userUnit->id)
-                              ->orWhere('organizational_units.id', $userSectorId);
-                        });
-                    }
-
-                    // If specific organizational units are selected, check those
-                    if (!empty($organizationalUnitIds)) {
-                        $query->orWhereHas('organizationalUnits', function ($q) use ($organizationalUnitIds) {
-                            $q->whereIn('organizational_units.id', $organizationalUnitIds);
-                        });
-                    }
-                });
+                // Check for overlaps in the selected organizational units
+                if (!empty($organizationalUnitIds)) {
+                    $overlappingEvents->whereHas('organizationalUnits', function ($q) use ($organizationalUnitIds) {
+                        $q->whereIn('organizational_units.id', $organizationalUnitIds);
+                    });
+                } else {
+                    // For global events, check all priority events
+                    $overlappingEvents->whereDoesntHave('organizationalUnits');
+                }
 
                 $overlappingEvents = $overlappingEvents->get();
 
@@ -484,7 +473,8 @@ class CalendarController extends Controller
                                 'end_date' => $event->end_date,
                                 'organizational_units' => $event->organizationalUnits->pluck('name')
                             ];
-                        })
+                        })->toArray(),
+                        'can_force_update' => true
                     ], 422);
                 }
             }

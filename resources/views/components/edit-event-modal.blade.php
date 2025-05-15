@@ -220,9 +220,9 @@
                 </div>
 
                 <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700">Edit guests</label>
+                    <label for="edit-guest-input" class="block text-sm font-medium text-gray-700">Guests</label>
                     <div id="edit-guest-container" class="flex flex-wrap gap-2 p-2 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-colors">
-                        <input id="edit-guest-input" type="email" class="outline-none border-none flex-grow p-1"
+                        <input id="edit-guest-input" name="guest_input" type="email" class="outline-none border-none flex-grow p-1"
                             placeholder="Type email and press Enter">
                     </div>
                     <input type="hidden" name="guests" id="edit-guest-hidden" value="[]">
@@ -451,9 +451,10 @@ window.openEditModal = function(event) {
             throw new Error('Invalid date value');
         }
 
-        // Add timezone offset to compensate for local timezone
-        const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
-        const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
+        // Format dates for input fields - use correct timezone handling
+        // Convert to local timezone by adjusting for the offset
+        const startLocal = new Date(startDate.getTime() - (startDate.getTimezoneOffset() * 60000));
+        const endLocal = new Date(endDate.getTime() - (endDate.getTimezoneOffset() * 60000));
 
         document.getElementById('edit-start-date').value = startLocal.toISOString().slice(0, 16);
         document.getElementById('edit-end-date').value = endLocal.toISOString().slice(0, 16);
@@ -691,146 +692,103 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form submission
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
+        const form = this;
+        const formData = new FormData(form);
+        const eventId = document.getElementById('edit-event-id').value;
 
         try {
-            // Handle any pending guest input
-            const emailInput = document.getElementById('edit-guest-input');
-            const email = emailInput.value.trim();
-            if (email) {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (emailRegex.test(email)) {
-                    if (!editGuests.includes(email)) {
-                        editGuests.push(email);
-                        createEditGuestTag(email);
-                        document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
-                    }
-                    emailInput.value = "";
-                } else {
-                    await Swal.fire({
-                        icon: 'error',
-                        title: 'Invalid Email',
-                        text: 'Please enter a valid email address for the guest',
-                        confirmButtonColor: '#22c55e'
-                    });
-                    return;
-                }
-            }
-
-            // Check if at least one organizational unit is selected or global is checked
-            const isGlobalCheckbox = document.getElementById('edit-is_global');
-            const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
-            const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
-
-            if (!isGlobal && selectedUnits.length === 0) {
-                await Swal.fire({
-                    icon: 'error',
-                    title: 'Visibility Required',
-                    text: 'Please select at least one organizational unit or mark as global event',
-                    confirmButtonColor: '#22c55e'
-                });
-                return;
-            }
-
-            const formData = new FormData(this);
-
-            // Submit the form
-            const response = await fetch(this.action, {
-                    method: 'POST',
-                body: formData,
-                    headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                });
-
-            const responseData = await response.json();
-
-            if (!response.ok) {
-                // Handle priority event overlap
-                if (response.status === 422 && responseData.overlapping_events) {
-                    let conflictHtml = 'This time slot overlaps with the following priority events:<br><br>';
-
-                    responseData.overlapping_events.forEach(event => {
-                        const startDate = new Date(event.start_date).toLocaleString();
-                        const endDate = new Date(event.end_date).toLocaleString();
-                        conflictHtml += `<strong>${event.title}</strong><br>`;
-                        conflictHtml += `From: ${startDate}<br>`;
-                        conflictHtml += `To: ${endDate}<br>`;
-                        if (event.organizational_units && event.organizational_units.length > 0) {
-                            conflictHtml += `Organizational Units: ${event.organizational_units.join(', ')}<br>`;
-                        }
-                        conflictHtml += '<br>';
-                    });
-
-                    const result = await Swal.fire({
-                        title: 'Priority Event Conflict',
-                        html: conflictHtml,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        showDenyButton: true,
-                        confirmButtonColor: '#22c55e',
-                        denyButtonColor: '#3b82f6',
-                        cancelButtonColor: '#ef4444',
-                        confirmButtonText: 'Proceed anyway',
-                        denyButtonText: 'Edit',
-                        cancelButtonText: 'Cancel'
-                    });
-
-                    if (result.isConfirmed) {
-                        // Proceed with event update despite conflicts
-                        formData.append('force_update', 'true');
-                        const retryResponse = await fetch(this.action, {
+            const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 }
             });
 
-                        if (retryResponse.ok) {
-                            await Swal.fire({
-                                icon: 'success',
-                                title: 'Success',
-                                text: 'Event updated successfully!',
-                                confirmButtonColor: '#22c55e'
-                            });
-                            closeEditModal();
-                            window.location.reload();
-            } else {
-                            throw new Error('Failed to update event');
-                        }
-                    } else if (result.isDenied) {
-                        // Return to form for editing
-                        return;
-                    } else {
-                        // Cancel event update
-                        return;
-                    }
-                } else {
-                    throw new Error(responseData.error || 'Failed to update event');
-            }
-            }
+            const data = await response.json();
+            console.log('Response:', data); // Debug log
 
-                await Swal.fire({
+            if (response.ok) {
+                // Success - close modal and refresh calendar
+                closeEditModal();
+                calendar.refetchEvents();
+                Swal.fire({
                     icon: 'success',
-                    title: 'Success',
-                text: 'Event updated successfully!',
-                    confirmButtonColor: '#22c55e'
+                    title: 'Success!',
+                    text: 'Event updated successfully',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else if (response.status === 422 && data.overlapping_events) {
+                // Show warning with overlapping events
+                const overlappingEvents = data.overlapping_events;
+                let html = '<div class="text-left">';
+                html += '<p class="mb-3">This event overlaps with the following priority events:</p>';
+                html += '<ul class="list-disc pl-5 space-y-2">';
+                overlappingEvents.forEach(event => {
+                    const start = new Date(event.start_date).toLocaleString();
+                    const end = new Date(event.end_date).toLocaleString();
+                    html += `<li class="text-sm">
+                        <strong>${event.title}</strong><br>
+                        <span class="text-gray-600">${start} - ${end}</span><br>
+                        <span class="text-gray-500">${event.organizational_units.join(', ')}</span>
+                    </li>`;
+                });
+                html += '</ul></div>';
+
+                const result = await Swal.fire({
+                    title: 'Warning: Overlapping Events',
+                    html: html,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'Proceed anyway',
+                    denyButtonText: 'Edit',
+                    cancelButtonText: 'Cancel',
+                    width: '600px'
                 });
 
-                closeEditModal();
-                window.location.reload();
+                if (result.isConfirmed) {
+                    // User chose to proceed - submit with force_update flag
+                    formData.append('force_update', '1');
+                    const forceResponse = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    });
 
+                    if (forceResponse.ok) {
+                        closeEditModal();
+                        calendar.refetchEvents();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: 'Event updated successfully',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        throw new Error('Failed to update event');
+                    }
+                } else if (result.isDenied) {
+                    // User chose to edit - keep modal open
+                    return;
+                } else {
+                    // User chose to cancel - close modal
+                    closeEditModal();
+                }
+            } else {
+                throw new Error(data.error || 'Failed to update event');
+            }
         } catch (error) {
             console.error('Error:', error);
-            await Swal.fire({
+            Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'An error occurred while updating the event',
-                confirmButtonColor: '#22c55e'
+                text: error.message || 'Failed to update event',
+                confirmButtonText: 'OK'
             });
         }
     });

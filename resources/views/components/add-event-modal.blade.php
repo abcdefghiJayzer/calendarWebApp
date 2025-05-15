@@ -18,13 +18,13 @@
                     $sectoralHeadColor = '#039be5';
                     $divisionHeadColor = '#e8b4bc';
                     $divisionEmployeeColor = '#616161';
-                    
+
                     // Get user and determine color based on role
                     $user = auth()->user();
-                    
+
                     // Set default color based on user role
                     $defaultColor = $divisionEmployeeColor; // default color
-                    
+
                     switch($user->role) {
                         case 'admin':
                             $defaultColor = $adminColor;
@@ -50,7 +50,7 @@
                             $user = auth()->user();
                             $userUnit = $user->organizationalUnit;
                             $isAdmin = $user->division === 'institute';
-                            
+
                             // Get all organizational units
                             $sectors = \App\Models\OrganizationalUnit::where('type', 'sector')->get();
                             $divisions = \App\Models\OrganizationalUnit::where('type', 'division')->get();
@@ -58,8 +58,8 @@
 
                         <!-- Organizational Units Dropdown -->
                         <div class="relative">
-                            <button id="organizationalUnitsButton" data-dropdown-toggle="organizationalUnitsDropdown" 
-                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between" 
+                            <button id="organizationalUnitsButton" data-dropdown-toggle="organizationalUnitsDropdown"
+                                class="w-full text-left bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors inline-flex items-center justify-between"
                                 type="button">
                                 <span id="selectedUnitsText">Select organizational units</span>
                                 <svg class="w-4 h-4 ml-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
@@ -86,7 +86,7 @@
                                     @if($isAdmin || ($userUnit && $userUnit->type === 'sector' && $userUnit->name === 'Admin'))
                                     <li class="border-b border-gray-200 pb-2 mb-2">
                                         <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                            <input type="checkbox" name="is_global" id="is_global" value="1" 
+                                            <input type="checkbox" name="is_global" id="is_global" value="1"
                                                 class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                                             <label for="is_global" class="w-full ms-2 text-sm font-medium text-gray-900">
                                                 Global Event (Visible to Everyone)
@@ -101,8 +101,8 @@
                                             <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $sector->id }}"
                                                         id="sector-{{ $sector->id }}"
                                                         class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -115,8 +115,8 @@
                                             @foreach($divisions->where('parent_id', $sector->id) as $division)
                                                 <li>
                                                     <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                        <input type="checkbox" 
-                                                            name="organizational_unit_ids[]" 
+                                                        <input type="checkbox"
+                                                            name="organizational_unit_ids[]"
                                                             value="{{ $division->id }}"
                                                             id="division-{{ $division->id }}"
                                                             class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -134,8 +134,8 @@
                                             <li class="font-medium text-gray-900 px-2 py-1">{{ $sector->name }}</li>
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $sector->id }}"
                                                         id="sector-{{ $sector->id }}"
                                                         class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -148,8 +148,8 @@
                                             @foreach($divisions->where('parent_id', $sector->id) as $division)
                                                 <li>
                                                     <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                        <input type="checkbox" 
-                                                            name="organizational_unit_ids[]" 
+                                                        <input type="checkbox"
+                                                            name="organizational_unit_ids[]"
                                                             value="{{ $division->id }}"
                                                             id="division-{{ $division->id }}"
                                                             class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -166,8 +166,8 @@
                                         <li class="font-medium text-gray-900 px-2 py-1">{{ $userUnit->name }}</li>
                                         <li>
                                             <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
+                                                <input type="checkbox"
+                                                    name="organizational_unit_ids[]"
                                                     value="{{ $userUnit->id }}"
                                                     id="sector-{{ $userUnit->id }}"
                                                     class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -180,8 +180,8 @@
                                         @foreach($divisions->where('parent_id', $userUnit->id) as $division)
                                             <li>
                                                 <div class="flex items-center p-2 rounded hover:bg-gray-50 ml-4">
-                                                    <input type="checkbox" 
-                                                        name="organizational_unit_ids[]" 
+                                                    <input type="checkbox"
+                                                        name="organizational_unit_ids[]"
                                                         value="{{ $division->id }}"
                                                         id="division-{{ $division->id }}"
                                                         class="division-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -196,8 +196,8 @@
                                         <!-- Division Head and Employees can only see their division -->
                                         <li>
                                             <div class="flex items-center p-2 rounded hover:bg-gray-50">
-                                                <input type="checkbox" 
-                                                    name="organizational_unit_ids[]" 
+                                                <input type="checkbox"
+                                                    name="organizational_unit_ids[]"
                                                     value="{{ $userUnit->id }}"
                                                     id="division-{{ $userUnit->id }}"
                                                     class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -327,9 +327,9 @@
         modal.classList.remove('translate-x-full');
         document.getElementById('calendar-container').classList.add('mr-120');
 
-        // Set the color based on user's role
+        // Set the event color based on user role
         const userRole = "{{ auth()->user()->role }}";
-        
+
         let color = COLORS.divisionEmployee; // default color
 
         switch(userRole) {
@@ -349,15 +349,16 @@
         document.getElementById('event-color').value = color;
 
         if (startDate) {
-            const startLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
+            // Format dates for input fields - use correct timezone handling
+            const startLocal = new Date(startDate);
+            const endLocal = endDate ? new Date(endDate) : new Date(startDate);
+            
+            // Ensure we're working with local dates
+            startLocal.setMinutes(startLocal.getMinutes() - startLocal.getTimezoneOffset());
+            endLocal.setMinutes(endLocal.getMinutes() - endLocal.getTimezoneOffset());
+            
             document.getElementById('start_date').value = startLocal.toISOString().slice(0, 16);
-
-            if (endDate) {
-                const endLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
-                document.getElementById('end_date').value = endLocal.toISOString().slice(0, 16);
-            } else {
-                document.getElementById('end_date').value = startLocal.toISOString().slice(0, 16);
-            }
+            document.getElementById('end_date').value = endLocal.toISOString().slice(0, 16);
         }
 
         // Add backdrop
@@ -423,7 +424,7 @@
         const selectedCheckboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked:not(:disabled)');
         const selectedText = document.getElementById('selectedUnitsText');
         const isGlobalCheckbox = document.getElementById('is_global');
-        
+
         if (isGlobalCheckbox && isGlobalCheckbox.checked) {
             selectedText.textContent = 'Global Event';
         } else if (selectedCheckboxes.length === 0) {
@@ -439,12 +440,12 @@
     function initializeDropdown() {
         const dropdownButton = document.getElementById('organizationalUnitsButton');
         const dropdown = document.getElementById('organizationalUnitsDropdown');
-        
+
         if (!dropdownButton || !dropdown) {
             console.error('Dropdown elements not found');
             return;
         }
-        
+
         dropdownButton.addEventListener('click', function(e) {
             e.preventDefault();
             dropdown.classList.toggle('hidden');
@@ -452,7 +453,7 @@
 
         // Close dropdown when clicking outside
         document.addEventListener('click', function(event) {
-            if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') && 
+            if (dropdownButton && dropdown && !dropdown.classList.contains('hidden') &&
                 !dropdownButton.contains(event.target) && !dropdown.contains(event.target)) {
                 dropdown.classList.add('hidden');
             }
@@ -466,29 +467,29 @@
         if (globalCheckbox) {
             globalCheckbox.addEventListener('change', function() {
                 const checkboxes = document.querySelectorAll('input[name="organizational_unit_ids[]"]');
-                
+
                 checkboxes.forEach(checkbox => {
                     checkbox.disabled = this.checked;
                     if (this.checked) {
                         checkbox.checked = false;
                     }
                 });
-                
+
                 updateSelectedUnitsText();
             });
         }
-        
+
         // Sector checkboxes
         document.querySelectorAll('.sector-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', function() {
                 const sectorId = this.dataset.sectorId;
                 const divisionCheckboxes = document.querySelectorAll(`.division-checkbox[data-sector-id="${sectorId}"]`);
-                
+
                 divisionCheckboxes.forEach(divCheckbox => {
                     divCheckbox.checked = this.checked;
                     divCheckbox.disabled = this.checked;
                 });
-                
+
                 updateSelectedUnitsText();
             });
         });
@@ -499,13 +500,13 @@
                 const sectorId = this.dataset.sectorId;
                 const sectorCheckbox = document.querySelector(`.sector-checkbox[data-sector-id="${sectorId}"]`);
                 const divisionCheckboxes = document.querySelectorAll(`.division-checkbox[data-sector-id="${sectorId}"]`);
-                
+
                 if (sectorCheckbox) {
                     // If all divisions are checked, check the sector
                     const allChecked = Array.from(divisionCheckboxes).every(cb => cb.checked);
                     sectorCheckbox.checked = allChecked;
                 }
-                
+
                 updateSelectedUnitsText();
             });
         });
@@ -523,148 +524,106 @@
         initializeCheckboxes();
     });
 
+    // Form submission handler
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-
+        
+        const form = this;
+        const formData = new FormData(form);
+        
         try {
-            // Handle any pending guest input
-            const emailInput = document.getElementById('guest-input');
-            const email = emailInput.value.trim();
-            if (email) {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (emailRegex.test(email)) {
-                    if (!guests.includes(email)) {
-                        guests.push(email);
-                        createGuestTag(email);
-                        updateHiddenInput();
-                    }
-                    emailInput.value = "";
-                } else {
-                    await Swal.fire({
-                        icon: 'error',
-                        title: 'Invalid Email',
-                        text: 'Please enter a valid email address for the guest',
-                        confirmButtonColor: '#22c55e'
-                    });
-                    return;
-                }
-            }
-
-            // Check if at least one organizational unit is selected or global is checked
-            const isGlobalCheckbox = document.getElementById('is_global');
-            const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
-            const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
-            
-            if (!isGlobal && selectedUnits.length === 0) {
-                await Swal.fire({
-                    icon: 'error',
-                    title: 'Visibility Required',
-                    text: 'Please select at least one organizational unit or mark as global event',
-                    confirmButtonColor: '#22c55e'
-                });
-                return;
-            }
-
-            const formData = new FormData(this);
-
-            // Submit the form
-            const response = await fetch(this.action, {
+            const response = await fetch(form.action, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 }
             });
-
-            const responseData = await response.json();
-
-            if (!response.ok) {
-                // Handle priority event overlap
-                if (response.status === 422 && responseData.overlapping_events) {
-                    let conflictHtml = 'This time slot overlaps with the following priority events:<br><br>';
+            
+            const data = await response.json();
+            console.log('Response:', data); // Debug log
+            
+            if (response.ok) {
+                // Success
+                closeAddModal();
+                calendar.refetchEvents();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: 'Event created successfully',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else if (response.status === 422 && data.overlapping_events) {
+                // Show warning with overlapping events
+                const overlappingEvents = data.overlapping_events;
+                let html = '<div class="text-left">';
+                html += '<p class="mb-3">This event overlaps with the following priority events:</p>';
+                html += '<ul class="list-disc pl-5 space-y-2">';
+                overlappingEvents.forEach(event => {
+                    const start = new Date(event.start_date).toLocaleString();
+                    const end = new Date(event.end_date).toLocaleString();
+                    html += `<li class="text-sm">
+                        <strong>${event.title}</strong><br>
+                        <span class="text-gray-600">${start} - ${end}</span><br>
+                        <span class="text-gray-500">${event.organizational_units.join(', ')}</span>
+                    </li>`;
+                });
+                html += '</ul></div>';
+                
+                const result = await Swal.fire({
+                    title: 'Warning: Overlapping Events',
+                    html: html,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'Proceed anyway',
+                    denyButtonText: 'Edit',
+                    cancelButtonText: 'Cancel',
+                    width: '600px'
+                });
+                
+                if (result.isConfirmed) {
+                    // User chose to proceed - submit with force_create flag
+                    formData.append('force_create', '1');
+                    const forceResponse = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    });
                     
-                    responseData.overlapping_events.forEach(event => {
-                        const startDate = new Date(event.start_date).toLocaleString();
-                        const endDate = new Date(event.end_date).toLocaleString();
-                        conflictHtml += `<strong>${event.title}</strong><br>`;
-                        conflictHtml += `From: ${startDate}<br>`;
-                        conflictHtml += `To: ${endDate}<br>`;
-                        if (event.organizational_units && event.organizational_units.length > 0) {
-                            conflictHtml += `Organizational Units: ${event.organizational_units.join(', ')}<br>`;
-                        }
-                        conflictHtml += '<br>';
-                    });
-
-                    const result = await Swal.fire({
-                        title: 'Priority Event Conflict',
-                        html: conflictHtml,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        showDenyButton: true,
-                        confirmButtonColor: '#22c55e',
-                        denyButtonColor: '#3b82f6',
-                        cancelButtonColor: '#ef4444',
-                        confirmButtonText: 'Proceed anyway',
-                        denyButtonText: 'Edit',
-                        cancelButtonText: 'Cancel'
-                    });
-
-                    if (result.isConfirmed) {
-                        // Proceed with event creation despite conflicts
-                        formData.append('force_create', 'true');
-                        const retryResponse = await fetch(this.action, {
-                            method: 'POST',
-                            body: formData,
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                            }
+                    if (forceResponse.ok) {
+                        closeAddModal();
+                        calendar.refetchEvents();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: 'Event created successfully',
+                            timer: 1500,
+                            showConfirmButton: false
                         });
-                        
-                        if (retryResponse.ok) {
-                            await Swal.fire({
-                                icon: 'success',
-                                title: 'Success',
-                                text: 'Event created successfully!',
-                                confirmButtonColor: '#22c55e'
-                            });
-                            closeModal();
-                            window.location.reload();
-                        } else {
-                            throw new Error('Failed to create event');
-                        }
-                    } else if (result.isDenied) {
-                        // Return to form for editing
-                        return;
                     } else {
-                        // Cancel event creation
-                        return;
+                        throw new Error('Failed to create event');
                     }
+                } else if (result.isDenied) {
+                    // User chose to edit - keep modal open
+                    return;
                 } else {
-                    throw new Error(responseData.error || 'Failed to create event');
+                    // User chose to cancel - close modal
+                    closeAddModal();
                 }
+            } else {
+                throw new Error(data.error || 'Failed to create event');
             }
-
-            await Swal.fire({
-                icon: 'success',
-                title: 'Success',
-                text: 'Event created successfully!',
-                confirmButtonColor: '#22c55e'
-            });
-
-            closeModal();
-            window.location.reload();
-
         } catch (error) {
             console.error('Error:', error);
-            await Swal.fire({
+            Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'An error occurred while creating the event',
-                confirmButtonColor: '#22c55e'
+                text: error.message || 'Failed to create event',
+                confirmButtonText: 'OK'
             });
         }
     });
@@ -683,4 +642,7 @@
             closeModal();
         }
     }, true);
+
+    // Add closeAddModal as an alias to closeModal
+    window.closeAddModal = closeModal;
 </script>
