@@ -660,14 +660,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             this.classList.add('border-red-500');
-            alert('Please enter a valid email address');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid Email',
+                text: 'Please enter a valid email address',
+                confirmButtonColor: '#22c55e'
+            });
             return;
         }
 
         if (!editGuests.includes(email)) {
             editGuests.push(email);
             createEditGuestTag(email);
-            document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
+            updateEditHiddenInput();  // Add this function call
         }
         this.value = "";
         this.classList.remove('border-red-500');
@@ -692,21 +697,101 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form submission
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const form = this;
+
+        // Check if there's a pending email in the guest input field
+        const guestInput = document.getElementById('edit-guest-input');
+        const pendingEmail = guestInput.value.trim();
+
+        if (pendingEmail) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(pendingEmail)) {
+                // Add the pending email to the guest list
+                if (!editGuests.includes(pendingEmail)) {
+                    editGuests.push(pendingEmail);
+                    createEditGuestTag(pendingEmail);
+                    updateEditHiddenInput();  // Use this function instead of direct assignment
+                }
+                guestInput.value = "";
+            } else {
+                // Invalid email format - show error and prevent submission
+                guestInput.classList.add('border-red-500');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Email',
+                    text: 'Please enter a valid email address or clear the guest input field.',
+                    confirmButtonColor: '#22c55e'
+                });
+                return;
+            }
+        }
+
         const formData = new FormData(form);
         const eventId = document.getElementById('edit-event-id').value;
 
         try {
+            // Add loading state to the button
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Updating...
+            `;
+
             const response = await fetch(`/OJT/calendarWebApp/events/${eventId}`, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'  // Explicitly request JSON response
                 }
             });
 
-            const data = await response.json();
-            console.log('Response:', data); // Debug log
+            // Restore button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+
+            // Handle response based on content type
+            const contentType = response.headers.get('content-type');
+            let data;
+
+            if (contentType && contentType.includes('application/json')) {
+                // If it's JSON, parse it normally
+                data = await response.json();
+            } else {
+                // If not JSON, handle as plain text and create a user-friendly error
+                const textResponse = await response.text();
+                console.error('Server returned non-JSON response:', textResponse);
+
+                // Create a structured error object to maintain consistency with JSON responses
+                data = {
+                    success: false,
+                    error: 'Server returned an unexpected response format. Please try again or contact support.'
+                };
+
+                // Log the first 500 characters of the response for debugging
+                if (textResponse.length > 0) {
+                    console.error('Response preview:', textResponse.substring(0, 500) + '...');
+                }
+
+                // If we got here but the response was actually OK, consider it a success
+                // This handles cases where the server returns HTML but the operation succeeded
+                if (response.ok) {
+                    closeEditModal();
+                    calendar.refetchEvents();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: 'Event updated successfully',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    return;
+                }
+            }
 
             if (response.ok) {
                 // Success - close modal and refresh calendar
@@ -780,14 +865,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     closeEditModal();
                 }
             } else {
-                throw new Error(data.error || 'Failed to update event');
+                // Handle general errors
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: data.error || data.message || 'Failed to update event',
+                    confirmButtonColor: '#22c55e'
+                });
             }
         } catch (error) {
             console.error('Error:', error);
+
+            // Check if the event was actually created despite the error
+            // This is a common scenario when the server returns non-JSON but the operation succeeds
+            setTimeout(() => {
+                calendar.refetchEvents();
+            }, 1000);
+
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: error.message || 'Failed to update event',
+                text: 'An unexpected error occurred, but your event might have been saved. The calendar will refresh shortly.',
                 confirmButtonText: 'OK'
             });
         }
@@ -814,6 +912,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeEditDropdown();
     initializeEditCheckboxes();
 });
+
+// Add this missing function to update the hidden input with guest emails
+function updateEditHiddenInput() {
+    document.getElementById('edit-guest-hidden').value = JSON.stringify(editGuests);
+}
 
 // Initialize edit dropdown toggle
 function initializeEditDropdown() {

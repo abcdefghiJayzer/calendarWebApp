@@ -103,6 +103,13 @@ class CalendarController extends Controller
                         }
                     }
 
+                    // Get guests for this event
+                    $guests = $event->participants->pluck('email')->toArray();
+                    \Log::info('Event guests', [
+                        'event_id' => $event->id,
+                        'guests' => $guests
+                    ]);
+
                     // Hide details if event is private and user is not the owner
                     if ($data['private'] && $data['user_id'] !== $user->id) {
                         $data['title'] = 'Private Event';
@@ -119,12 +126,12 @@ class CalendarController extends Controller
                         $data['extendedProps'] = [
                             'description' => $data['description'],
                             'location' => $data['location'],
-                            'guests' => $event->participants->pluck('email'),
+                            'guests' => $guests,
                             'private' => $data['private'],
                             'user_id' => (int)$data['user_id'],
                             'organizational_unit_ids' => $event->organizationalUnits->pluck('id')->toArray(),
                             'organizational_unit_names' => $event->organizationalUnits->pluck('name')->toArray(),
-                            'is_global' => $event->organizationalUnits->isEmpty(), // Event is global if no org units are selected
+                            'is_global' => $event->organizationalUnits->isEmpty(),
                             'visible_to_organizational_units' => $event->organizationalUnits->pluck('id')->toArray(),
                             'creator_role' => $creatorRole
                         ];

@@ -83,6 +83,11 @@
             }
         };
 
+        // Debug logging
+        console.log('Event data:', event);
+        console.log('Event guests:', event.extendedProps?.guests);
+        console.log('Event guests type:', typeof event.extendedProps?.guests);
+
         content.innerHTML = `
             <div class="space-y-5">
                 <div class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100 shadow-sm">
@@ -142,26 +147,58 @@
 
                 <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                     <h3 class="text-base font-semibold text-gray-900 mb-2">Description</h3>
-                    <p class="text-sm text-gray-600">${event.extendedProps.description || 'No description provided'}</p>
+                    <p class="text-sm text-gray-600">${event.extendedProps?.description || 'No description provided'}</p>
                 </div>
 
                 <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                     <h3 class="text-base font-semibold text-gray-900 mb-2">Location</h3>
-                    <p class="text-sm text-gray-600">${event.extendedProps.location || 'No location specified'}</p>
+                    <p class="text-sm text-gray-600">${event.extendedProps?.location || 'No location specified'}</p>
                 </div>
 
-                ${event.extendedProps.guests && event.extendedProps.guests.length > 0 ? `
-                    <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                        <h3 class="text-base font-semibold text-gray-900 mb-2">Guests</h3>
-                        <div class="flex flex-wrap gap-1.5">
+                ${event.extendedProps?.guests && Array.isArray(event.extendedProps.guests) && event.extendedProps.guests.length > 0 ? `
+                    <div class="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100 shadow-sm">
+                        <div class="flex items-center space-x-2 mb-3">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-semibold text-purple-900">Event Guests</h3>
+                                <p class="text-sm text-purple-600">${event.extendedProps.guests.length} ${event.extendedProps.guests.length === 1 ? 'guest' : 'guests'}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
                             ${event.extendedProps.guests.map(guest => `
-                                <span class="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                                    ${guest}
-                                </span>
+                                <div class="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm border border-purple-100">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                            <span class="text-sm font-medium text-purple-600">${guest.charAt(0).toUpperCase()}</span>
+                                        </div>
+                                        <span class="text-sm text-gray-700">${guest}</span>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Invited</span>
+                                    </div>
+                                </div>
                             `).join('')}
                         </div>
                     </div>
-                ` : ''}
+                ` : `
+                    <div class="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100 shadow-sm">
+                        <div class="flex items-center space-x-2">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-semibold text-purple-900">Event Guests</h3>
+                                <p class="text-sm text-gray-500">No guests for this event</p>
+                            </div>
+                        </div>
+                    </div>
+                `}
             </div>
         `;
 

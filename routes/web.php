@@ -43,6 +43,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/sync-all-to-google', [CalendarController::class, 'syncAllToGoogle'])->name('events.sync-all-to-google');
 });
 
+// Test route for email
+Route::get('/test-email', [\App\Http\Controllers\TestController::class, 'testEmail'])->name('test.email');
+
 // Debug route to view session data
 Route::get('/debug/session', function() {
     // Only enable in debug mode

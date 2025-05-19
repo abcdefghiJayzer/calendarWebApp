@@ -252,7 +252,7 @@
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-gray-700">Add guests</label>
                     <div id="guest-container" class="flex flex-wrap gap-2 p-2 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-colors">
-                        <input id="guest-input" type="email" class="outline-none border-none flex-grow p-1" placeholder="Type email and press Enter">
+                        <input id="guest-input" type="text" class="outline-none border-none flex-grow p-1" placeholder="Type email and press space or comma">
                     </div>
                     <input type="hidden" name="guests" id="guest-hidden" value="[]">
                 </div>
@@ -352,11 +352,11 @@
             // Format dates for input fields - use correct timezone handling
             const startLocal = new Date(startDate);
             const endLocal = endDate ? new Date(endDate) : new Date(startDate);
-            
+
             // Ensure we're working with local dates
             startLocal.setMinutes(startLocal.getMinutes() - startLocal.getTimezoneOffset());
             endLocal.setMinutes(endLocal.getMinutes() - endLocal.getTimezoneOffset());
-            
+
             document.getElementById('start_date').value = startLocal.toISOString().slice(0, 16);
             document.getElementById('end_date').value = endLocal.toISOString().slice(0, 16);
         }
@@ -393,31 +393,6 @@
         Array.from(guestContainer.children).forEach(child => {
             if (child !== guestInput) child.remove();
         });
-    }
-
-    function updateHiddenInput() {
-        document.getElementById('guest-hidden').value = JSON.stringify(guests);
-    }
-
-    function createGuestTag(email) {
-        const guestContainer = document.getElementById('guest-container');
-        const guestInput = document.getElementById('guest-input');
-
-        const span = document.createElement("span");
-        span.className = "px-2 py-1 bg-gray-100 rounded-full text-sm flex items-center group";
-        span.textContent = email;
-
-        const removeBtn = document.createElement("button");
-        removeBtn.innerHTML = "&times;";
-        removeBtn.className = "ml-2 text-gray-400 hover:text-red-500 transition-colors";
-        removeBtn.onclick = function() {
-            guests = guests.filter(g => g !== email);
-            span.remove();
-            updateHiddenInput();
-        };
-
-        span.appendChild(removeBtn);
-        guestContainer.insertBefore(span, guestInput);
     }
 
     function updateSelectedUnitsText() {
@@ -527,25 +502,87 @@
     // Form submission handler
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
-        const form = this;
-        const formData = new FormData(form);
-        
+
         try {
-            const response = await fetch(form.action, {
+            // Handle any pending guest input
+            const emailInput = document.getElementById('guest-input');
+            const email = emailInput.value.trim();
+            if (email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (emailRegex.test(email)) {
+                    if (!guests.includes(email)) {
+                        guests.push(email);
+                        createGuestTag(email);
+                        // Define the update function inline to avoid the reference error
+                        document.getElementById('guest-hidden').value = JSON.stringify(guests);
+                    }
+                    emailInput.value = "";
+                } else {
+                    await Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid Email',
+                        text: 'Please enter a valid email address or clear the guest input field',
+                        confirmButtonColor: '#22c55e'
+                    });
+                    return;
+                }
+            }
+
+            // Check if at least one organizational unit is selected or global is checked
+            const isGlobalCheckbox = document.getElementById('is_global');
+            const isGlobal = isGlobalCheckbox ? isGlobalCheckbox.checked : false;
+            const selectedUnits = document.querySelectorAll('input[name="organizational_unit_ids[]"]:checked');
+
+            if (!isGlobal && selectedUnits.length === 0) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Visibility Required',
+                    text: 'Please select at least one organizational unit or mark as global event',
+                    confirmButtonColor: '#22c55e'
+                });
+                return;
+            }
+
+            const formData = new FormData(this);
+
+            // Add loading state to the button
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating...
+            `;
+
+            const response = await fetch(this.action, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             });
-            
+
+            // Restore button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+
             const data = await response.json();
             console.log('Response:', data); // Debug log
-            
+
             if (response.ok) {
                 // Success
-                closeAddModal();
+                closeModal();
                 calendar.refetchEvents();
                 Swal.fire({
                     icon: 'success',
@@ -570,7 +607,7 @@
                     </li>`;
                 });
                 html += '</ul></div>';
-                
+
                 const result = await Swal.fire({
                     title: 'Warning: Overlapping Events',
                     html: html,
@@ -582,7 +619,7 @@
                     cancelButtonText: 'Cancel',
                     width: '600px'
                 });
-                
+
                 if (result.isConfirmed) {
                     // User chose to proceed - submit with force_create flag
                     formData.append('force_create', '1');
@@ -590,12 +627,14 @@
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
-                    
+
                     if (forceResponse.ok) {
-                        closeAddModal();
+                        closeModal();
                         calendar.refetchEvents();
                         Swal.fire({
                             icon: 'success',
@@ -612,7 +651,7 @@
                     return;
                 } else {
                     // User chose to cancel - close modal
-                    closeAddModal();
+                    closeModal();
                 }
             } else {
                 throw new Error(data.error || 'Failed to create event');
@@ -645,4 +684,120 @@
 
     // Add closeAddModal as an alias to closeModal
     window.closeAddModal = closeModal;
+
+    // Initialize Tom Select for guests
+    const guestsSelect = new TomSelect('#guests', {
+        plugins: ['remove_button'],
+        persist: false,
+        create: true,
+        createOnBlur: true,
+        createFilter: function(input) {
+            return input.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+        },
+        onItemAdd: function(value, item) {
+            // Validate email format
+            if (!value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                this.removeItem(value);
+                return false;
+            }
+        }
+    });
+
+    // If editing, populate the form with event data
+    if (event) {
+        document.getElementById('event-title').value = event.title;
+        document.getElementById('event-description').value = event.extendedProps?.description || '';
+        document.getElementById('event-location').value = event.extendedProps?.location || '';
+        document.getElementById('event-start').value = event.start;
+        document.getElementById('event-end').value = event.end || event.start;
+        document.getElementById('event-all-day').checked = event.allDay;
+        document.getElementById('event-private').checked = event.extendedProps?.private || false;
+        document.getElementById('event-priority').checked = event.extendedProps?.is_priority || false;
+
+        // Set guests
+        if (event.extendedProps?.guests && Array.isArray(event.extendedProps.guests)) {
+            guestsSelect.clear();
+            event.extendedProps.guests.forEach(guest => {
+                guestsSelect.addItem(guest);
+            });
+        }
+
+        // Set organizational units
+        if (event.extendedProps?.organizational_unit_ids) {
+            const orgUnitSelect = document.getElementById('organizational-unit-ids');
+            if (orgUnitSelect) {
+                event.extendedProps.organizational_unit_ids.forEach(id => {
+                    const option = orgUnitSelect.querySelector(`option[value="${id}"]`);
+                    if (option) {
+                        option.selected = true;
+                    }
+                });
+            }
+        }
+    }
+
+    // Add event listener for guest input
+    document.getElementById('guest-input').addEventListener('input', function(e) {
+        const input = e.target;
+        const value = input.value.trim();
+
+        // Check if the last character is a space or comma
+        if (value.endsWith(' ') || value.endsWith(',')) {
+            // Remove the space or comma
+            const email = value.slice(0, -1).trim();
+
+            // Validate email format
+            if (email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                // Check if email is not already in the list
+                if (!guests.includes(email)) {
+                    guests.push(email);
+                    createGuestTag(email);
+                    // Update the hidden input with the JSON string of guests
+                    document.getElementById('guest-hidden').value = JSON.stringify(guests);
+                }
+            }
+
+            // Clear the input
+            input.value = '';
+        }
+    });
+
+    // Also handle paste events
+    document.getElementById('guest-input').addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        const emails = pastedText.split(/[\s,]+/).filter(email => email.trim() !== '');
+
+        emails.forEach(email => {
+            if (email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) && !guests.includes(email)) {
+                guests.push(email);
+                createGuestTag(email);
+            }
+        });
+
+        // Update the hidden input with the JSON string of guests
+        document.getElementById('guest-hidden').value = JSON.stringify(guests);
+    });
+
+    function createGuestTag(email) {
+        const guestContainer = document.getElementById('guest-container');
+        const guestInput = document.getElementById('guest-input');
+
+        const span = document.createElement("span");
+        span.className = "px-2 py-1 bg-gray-100 rounded-full text-sm flex items-center group";
+        span.textContent = email;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.innerHTML = "&times;";
+        removeBtn.className = "ml-2 text-gray-400 hover:text-red-500 transition-colors";
+        removeBtn.onclick = function() {
+            guests = guests.filter(g => g !== email);
+            span.remove();
+            // Update the hidden input when removing a guest
+            document.getElementById('guest-hidden').value = JSON.stringify(guests);
+        };
+
+        span.appendChild(removeBtn);
+        guestContainer.insertBefore(span, guestInput);
+    }
 </script>
