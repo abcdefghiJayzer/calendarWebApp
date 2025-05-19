@@ -322,6 +322,16 @@
 
     let guests = [];
 
+    function createGuestTag(email) {
+        const tag = document.createElement('div');
+        tag.className = 'flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm';
+        tag.innerHTML = `
+            <span>${email}</span>
+            <button type="button" class="text-blue-600 hover:text-blue-800" onclick="removeGuest('${email}')">×</button>
+        `;
+        return tag;
+    }
+
     function openModal(startDate = null, endDate = null) {
         const modal = document.getElementById('add-event-modal');
         modal.classList.remove('translate-x-full');
@@ -497,10 +507,89 @@
         // Initialize dropdowns and checkboxes
         initializeDropdown();
         initializeCheckboxes();
+
+        // Initialize guest input handling
+        const guestInput = document.getElementById('guest-input');
+        const guestContainer = document.getElementById('guest-container');
+        const guestHidden = document.getElementById('guest-hidden');
+
+        function updateHiddenInput() {
+            guestHidden.value = JSON.stringify(guests);
+        }
+
+        window.removeGuest = function(email) {
+            guests = guests.filter(g => g !== email);
+            updateHiddenInput();
+            const tags = guestContainer.querySelectorAll('.bg-blue-100');
+            tags.forEach(tag => {
+                if (tag.querySelector('span').textContent === email) {
+                    tag.remove();
+                }
+            });
+        };
+
+        guestInput.addEventListener('input', function(e) {
+            const value = e.target.value.trim();
+            if (value.endsWith(' ') || value.endsWith(',')) {
+                const email = value.slice(0, -1).trim();
+                if (email && !guests.includes(email)) {
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        guests.push(email);
+                        guestContainer.insertBefore(createGuestTag(email), guestInput);
+                        updateHiddenInput();
+                    }
+                }
+                e.target.value = '';
+            }
+        });
+
+        guestInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent form submission
+                const email = this.value.trim();
+                if (email && !guests.includes(email)) {
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        guests.push(email);
+                        guestContainer.insertBefore(createGuestTag(email), guestInput);
+                        updateHiddenInput();
+                        this.value = '';
+                    } else if (email) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Invalid Email',
+                            text: 'Please enter a valid email address',
+                            confirmButtonColor: '#22c55e'
+                        });
+                    }
+                }
+            }
+        });
+
+        guestInput.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const emails = pastedText.split(/[\s,]+/).filter(email => email.trim());
+
+            emails.forEach(email => {
+                if (email && !guests.includes(email)) {
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        guests.push(email);
+                        guestContainer.insertBefore(createGuestTag(email), guestInput);
+                    }
+                }
+            });
+            updateHiddenInput();
+        });
     });
 
     // Form submission handler
     document.getElementById('add-event-form').addEventListener('submit', async function(e) {
+        // Check if the event was triggered by pressing Enter in the guest input
+        if (document.activeElement === document.getElementById('guest-input')) {
+            e.preventDefault();
+            return;
+        }
+
         e.preventDefault();
 
         try {
@@ -734,70 +823,5 @@
                 });
             }
         }
-    }
-
-    // Add event listener for guest input
-    document.getElementById('guest-input').addEventListener('input', function(e) {
-        const input = e.target;
-        const value = input.value.trim();
-
-        // Check if the last character is a space or comma
-        if (value.endsWith(' ') || value.endsWith(',')) {
-            // Remove the space or comma
-            const email = value.slice(0, -1).trim();
-
-            // Validate email format
-            if (email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-                // Check if email is not already in the list
-                if (!guests.includes(email)) {
-                    guests.push(email);
-                    createGuestTag(email);
-                    // Update the hidden input with the JSON string of guests
-                    document.getElementById('guest-hidden').value = JSON.stringify(guests);
-                }
-            }
-
-            // Clear the input
-            input.value = '';
-        }
-    });
-
-    // Also handle paste events
-    document.getElementById('guest-input').addEventListener('paste', function(e) {
-        e.preventDefault();
-        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-        const emails = pastedText.split(/[\s,]+/).filter(email => email.trim() !== '');
-
-        emails.forEach(email => {
-            if (email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) && !guests.includes(email)) {
-                guests.push(email);
-                createGuestTag(email);
-            }
-        });
-
-        // Update the hidden input with the JSON string of guests
-        document.getElementById('guest-hidden').value = JSON.stringify(guests);
-    });
-
-    function createGuestTag(email) {
-        const guestContainer = document.getElementById('guest-container');
-        const guestInput = document.getElementById('guest-input');
-
-        const span = document.createElement("span");
-        span.className = "px-2 py-1 bg-gray-100 rounded-full text-sm flex items-center group";
-        span.textContent = email;
-
-        const removeBtn = document.createElement("button");
-        removeBtn.innerHTML = "&times;";
-        removeBtn.className = "ml-2 text-gray-400 hover:text-red-500 transition-colors";
-        removeBtn.onclick = function() {
-            guests = guests.filter(g => g !== email);
-            span.remove();
-            // Update the hidden input when removing a guest
-            document.getElementById('guest-hidden').value = JSON.stringify(guests);
-        };
-
-        span.appendChild(removeBtn);
-        guestContainer.insertBefore(span, guestInput);
     }
 </script>

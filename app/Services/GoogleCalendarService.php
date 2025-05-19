@@ -321,9 +321,17 @@ class GoogleCalendarService
         if (!empty($data['guests'])) {
             $attendees = [];
             foreach ($data['guests'] as $email) {
-                $attendees[] = ['email' => $email];
+                $attendees[] = [
+                    'email' => $email,
+                    'responseStatus' => 'needsAction'
+                ];
             }
             $event->setAttendees($attendees);
+            
+            // Set additional properties for attendees
+            $event->setGuestsCanModify(false);
+            $event->setGuestsCanSeeOtherGuests(true);
+            $event->setGuestsCanInviteOthers(false);
         }
 
         return $this->service->events->insert($this->calendarId, $event);
@@ -369,9 +377,17 @@ class GoogleCalendarService
             if (!empty($data['guests'])) {
                 $attendees = [];
                 foreach ($data['guests'] as $email) {
-                    $attendees[] = ['email' => $email];
+                    $attendees[] = [
+                        'email' => $email,
+                        'responseStatus' => 'needsAction'
+                    ];
                 }
                 $event->setAttendees($attendees);
+                
+                // Set additional properties for attendees
+                $event->setGuestsCanModify(false);
+                $event->setGuestsCanSeeOtherGuests(true);
+                $event->setGuestsCanInviteOthers(false);
             }
 
             \Log::info('Updating Google Calendar event', [
