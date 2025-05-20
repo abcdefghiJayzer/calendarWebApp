@@ -77,12 +77,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.calendar.refetchEvents();
                     }
 
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Success',
-                        text: responseData.message || (isEdit ? 'Event updated successfully!' : 'Event created successfully!'),
-                        confirmButtonColor: '#22c55e'
-                    });
+                    // Call syncAllToGoogle directly
+                    if (typeof window.syncAllToGoogle === 'function') {
+                        window.syncAllToGoogle();
+                    }
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -132,12 +130,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.calendar.refetchEvents();
                     }
 
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Success',
-                        text: data.message || 'Event created successfully!',
-                        confirmButtonColor: '#22c55e'
-                    });
+                    // Call syncAllToGoogle directly
+                    if (typeof window.syncAllToGoogle === 'function') {
+                        window.syncAllToGoogle();
+                    }
                 } else {
                     // Check specifically for overlapping priority events (422 status)
                     if (response.status === 422 && data.overlapping_events) {
@@ -193,12 +189,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.calendar.refetchEvents();
                     }
 
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Success',
-                        text: data.message || 'Event updated successfully!',
-                        confirmButtonColor: '#22c55e'
-                    });
+                    // Call syncAllToGoogle directly
+                    if (typeof window.syncAllToGoogle === 'function') {
+                        window.syncAllToGoogle();
+                    }
                 } else {
                     // Check specifically for overlapping priority events (422 status)
                     if (response.status === 422 && data.overlapping_events) {

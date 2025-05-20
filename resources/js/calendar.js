@@ -112,3 +112,6 @@ function syncAllToGoogle() {
         }
     });
 }
+
+// Make syncAllToGoogle globally available
+window.syncAllToGoogle = syncAllToGoogle;

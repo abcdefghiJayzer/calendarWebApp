@@ -20,7 +20,7 @@ class EventObserver
      */
     public function created(Event $event): void
     {
-        $this->syncWithGoogleCalendar($event);
+        // Automatic sync removed - events will only sync when manually triggered
     }
 
     /**
@@ -28,7 +28,7 @@ class EventObserver
      */
     public function updated(Event $event): void
     {
-        $this->syncWithGoogleCalendar($event);
+        // Automatic sync removed - events will only sync when manually triggered
     }
 
     /**
@@ -51,70 +51,6 @@ class EventObserver
                     'error' => $e->getMessage()
                 ]);
             }
-        }
-    }
-
-    /**
-     * Sync an event with Google Calendar
-     */
-    private function syncWithGoogleCalendar(Event $event): void
-    {
-        // Only proceed if the user is authenticated with Google
-        if (!$this->googleCalendarService->isAuthenticated()) {
-            return;
-        }
-
-        // Load the event with participants
-        $event->load('participants');
-
-        try {
-            if ($event->google_event_id) {
-                // Update existing Google event
-                $eventData = [
-                    'title' => $event->title,
-                    'description' => $event->description,
-                    'start_date' => $event->start_date,
-                    'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
-                    'location' => $event->location,
-                    'color' => $event->color,
-                    'guests' => $event->participants->pluck('email')->toArray(),
-                    'is_all_day' => $event->is_all_day
-                ];
-
-                $this->googleCalendarService->updateEvent($event->google_event_id, $eventData);
-                Log::info('Event automatically updated in Google Calendar', [
-                    'event_id' => $event->id,
-                    'google_event_id' => $event->google_event_id
-                ]);
-            } else {
-                // Create new Google event
-                $eventData = [
-                    'title' => $event->title,
-                    'description' => $event->description,
-                    'start_date' => $event->start_date,
-                    'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
-                    'location' => $event->location,
-                    'color' => $event->color,
-                    'guests' => $event->participants->pluck('email')->toArray(),
-                    'is_all_day' => $event->is_all_day
-                ];
-
-                $googleEvent = $this->googleCalendarService->createEvent($eventData);
-                
-                // Save the Google event ID to the local event
-                $event->google_event_id = $googleEvent->id;
-                $event->saveQuietly(); // Use saveQuietly to avoid triggering another update event
-                
-                Log::info('Event automatically created in Google Calendar', [
-                    'event_id' => $event->id,
-                    'google_event_id' => $googleEvent->id
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to automatically sync event with Google Calendar', [
-                'event_id' => $event->id,
-                'error' => $e->getMessage()
-            ]);
         }
     }
 }

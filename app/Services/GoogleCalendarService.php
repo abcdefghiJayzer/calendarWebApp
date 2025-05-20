@@ -334,7 +334,7 @@ class GoogleCalendarService
             $event->setGuestsCanInviteOthers(false);
         }
 
-        return $this->service->events->insert($this->calendarId, $event);
+        return $this->service->events->insert($this->calendarId, $event, ['sendUpdates' => 'all']);
     }
 
     public function updateEvent($eventId, $data)
@@ -396,7 +396,7 @@ class GoogleCalendarService
                 'title' => $data['title']
             ]);
 
-            $updatedEvent = $this->service->events->update($this->calendarId, $eventId, $event);
+            $updatedEvent = $this->service->events->update($this->calendarId, $eventId, $event, ['sendUpdates' => 'all']);
             \Log::info('Google Calendar event updated successfully', ['eventId' => $eventId]);
 
             return $updatedEvent;
