@@ -700,4 +700,69 @@ class GoogleCalendarService
 
         return false;
     }
+
+    /**
+     * Clear all Google tokens and session data
+     * Use this when disconnecting or switching accounts
+     */
+    public function clearTokens()
+    {
+        // Clear session tokens
+        Session::forget('google_token');
+        
+        // Clear user database tokens if user is logged in
+        if (Auth::check()) {
+            $user = Auth::user();
+            $user->google_access_token = null;
+            $user->google_refresh_token = null;
+            $user->google_calendar_id = null;
+            $user->save();
+            
+            \Log::info('Cleared Google tokens for user', ['user_id' => $user->id]);
+        }
+        
+        // Reset the client
+        $this->client->revokeToken();
+        $this->calendarId = null;
+        
+        return true;
+    }
+    
+    /**
+     * Check if the current Google account matches the stored one
+     * This helps detect account switching
+     */
+    public function verifyGoogleAccount()
+    {
+        try {
+            if (!$this->isAuthenticated()) {
+                return false;
+            }
+            
+            $user = Auth::user();
+            $currentEmail = $this->getUserEmail();
+            
+            if (!$currentEmail) {
+                \Log::warning('Could not retrieve current Google email');
+                return false;
+            }
+            
+            // If stored Google Calendar ID doesn't match current email
+            if ($user->google_calendar_id && $user->google_calendar_id !== $currentEmail) {
+                \Log::info('Google account changed', [
+                    'stored_email' => $user->google_calendar_id,
+                    'current_email' => $currentEmail
+                ]);
+                
+                // Clear tokens and force re-authentication
+                $this->clearTokens();
+                return false;
+            }
+            
+            return true;
+        } catch (\Exception $e) {
+            \Log::error('Error verifying Google account: ' . $e->getMessage());
+            return false;
+        }
+    }
 }

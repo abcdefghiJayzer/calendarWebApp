@@ -138,25 +138,13 @@ class GoogleAuthController extends Controller
 
     public function disconnect()
     {
-        // Make sure we completely remove any Google token data
-        Session::forget('google_token');
-        Session::forget('google_calendar_email');
+        // Use our dedicated method to clear all Google tokens
+        $this->googleCalendarService->clearTokens();
 
         // Also remove any cached Google events data
         Session::forget('google_events');
         Session::forget('google_calendar_last_sync');
         Session::save();
-
-        // Remove all Google Calendar related data from user
-        $user = Auth::user();
-        if ($user) {
-            $user->google_calendar_id = null;
-            $user->google_access_token = null;
-            $user->google_refresh_token = null;
-            $user->save();
-
-            Log::info('Cleared Google Calendar credentials from user', ['user_id' => $user->id]);
-        }
 
         Log::info('User disconnected from Google Calendar');
 
@@ -169,12 +157,38 @@ class GoogleAuthController extends Controller
 
     public function status()
     {
+        // First, verify if the connected Google account matches stored account
+        // This will automatically clear tokens if account has changed
+        $this->googleCalendarService->verifyGoogleAccount();
+
         $isAuthenticated = $this->googleCalendarService->isAuthenticated();
         $userEmail = $this->googleCalendarService->getUserEmail();
+
+        $user = Auth::user();
+        $storedEmail = $user ? $user->google_calendar_id : null;
+
+        // Check if emails don't match (account change detected)
+        $accountChanged = false;
+        if ($isAuthenticated && $userEmail && $storedEmail && $userEmail !== $storedEmail) {
+            $accountChanged = true;
+            \Log::warning('Google account mismatch detected', [
+                'stored_email' => $storedEmail,
+                'current_email' => $userEmail
+            ]);
+
+            // Clear tokens to force re-authentication
+            $this->googleCalendarService->clearTokens();
+            $isAuthenticated = false;
+
+            // Store flag in session for UI to show notification
+            Session::put('google_account_changed', true);
+        }
 
         return response()->json([
             'authenticated' => $isAuthenticated,
             'email' => $userEmail,
+            'stored_email' => $storedEmail,
+            'account_changed' => $accountChanged,
             'sessionData' => Session::has('google_token') ? 'exists' : 'missing'
         ]);
     }

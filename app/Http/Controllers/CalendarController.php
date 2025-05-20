@@ -306,7 +306,7 @@ class CalendarController extends Controller
             $user = auth()->user();
 
             $color = '#616161'; // Default color for division employee
-            
+
             switch($user->role) {
                 case 'admin':
                     $color = '#33b679'; // Admin color
@@ -389,7 +389,7 @@ class CalendarController extends Controller
     {
         try {
             $event = Event::findOrFail($id);
-            
+
             // Check ownership
             if (auth()->user()->division !== 'institute' && auth()->id() !== $event->user_id) {
                 return response()->json([
@@ -489,7 +489,7 @@ class CalendarController extends Controller
             // Update event details
             $user = auth()->user();
             $color = '#616161'; // Default color for division employee
-            
+
             switch($user->role) {
                 case 'admin':
                     $color = '#33b679'; // Admin color
@@ -1272,6 +1272,16 @@ class CalendarController extends Controller
             // Check if the user has Google tokens stored in the database
             if (empty($user->google_access_token)) {
                 \Log::info('User has no Google access token stored');
+                return [];
+            }
+
+            // Verify that we're using the right Google account
+            // This will automatically clear tokens if the account has changed
+            if (!$this->googleCalendarService->verifyGoogleAccount()) {
+                \Log::warning('Google account verification failed or account changed', [
+                    'user_id' => $user->id,
+                    'stored_email' => $user->google_calendar_id
+                ]);
                 return [];
             }
 
