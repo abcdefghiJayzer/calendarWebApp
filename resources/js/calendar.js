@@ -72,11 +72,13 @@ function syncAllToGoogle() {
             });
 
             // Make the API call
-            fetch('/api/calendar/sync-all-to-google', {
+            fetch('/sync-all-to-google', { // Changed from /api/calendar/sync-all-to-google
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json', // Ensure server knows we expect JSON
+                    'X-Requested-With': 'XMLHttpRequest' // Standard for AJAX requests
                 }
             })
             .then(response => response.json())

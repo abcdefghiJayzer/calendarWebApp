@@ -167,7 +167,7 @@
                                         <li>
                                             <div class="flex items-center p-2 rounded hover:bg-gray-50">
                                                 <input type="checkbox"
-                                                    name="organizational_unit_ids[]"
+                                                    na  me="organizational_unit_ids[]"
                                                     value="{{ $userUnit->id }}"
                                                     id="sector-{{ $userUnit->id }}"
                                                     class="sector-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
@@ -678,12 +678,40 @@
                 // Success
                 closeModal();
                 calendar.refetchEvents();
+                
+                // Show success message
                 Swal.fire({
                     icon: 'success',
                     title: 'Success!',
                     text: 'Event created successfully',
                     timer: 1500,
                     showConfirmButton: false
+                }).then(() => {
+                    // Silently trigger sync without any alerts
+                    const calendarEl = document.getElementById('calendar');
+                    const isAuthenticated = calendarEl && calendarEl.getAttribute('data-is-authenticated') === 'true';
+
+                    if (isAuthenticated) {
+                        // Make the API call silently
+                        fetch(`${window.baseUrl}/sync-all-to-google`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Refresh the calendar silently
+                                calendar.refetchEvents();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Silent sync error:', error);
+                        });
+                    }
                 });
             } else if (response.status === 422 && data.overlapping_events) {
                 // Show warning with overlapping events
@@ -717,7 +745,7 @@
                 if (result.isConfirmed) {
                     // User chose to proceed - submit with force_create flag
                     formData.append('force_create', '1');
-                    const forceResponse = await fetch(form.action, {
+                    const forceResponse = await fetch(this.action, { // Fix: Changed from form.action to this.action
                         method: 'POST',
                         body: formData,
                         headers: {
@@ -730,12 +758,20 @@
                     if (forceResponse.ok) {
                         closeModal();
                         calendar.refetchEvents();
+                        
+                        // Show success message
                         Swal.fire({
                             icon: 'success',
                             title: 'Success!',
                             text: 'Event created successfully',
                             timer: 1500,
                             showConfirmButton: false
+                        }).then(() => {
+                            // After success message, trigger sync
+                            const syncButton = document.getElementById('sync-all-to-google');
+                            if (syncButton) {
+                                syncButton.click();
+                            }
                         });
                     } else {
                         throw new Error('Failed to create event');
