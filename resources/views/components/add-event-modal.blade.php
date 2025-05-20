@@ -678,7 +678,7 @@
                 // Success
                 closeModal();
                 calendar.refetchEvents();
-                
+
                 // Show success message
                 Swal.fire({
                     icon: 'success',
@@ -758,7 +758,7 @@
                     if (forceResponse.ok) {
                         closeModal();
                         calendar.refetchEvents();
-                        
+
                         // Show success message
                         Swal.fire({
                             icon: 'success',
