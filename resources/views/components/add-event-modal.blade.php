@@ -380,6 +380,11 @@
 
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
+
+        // Focus on the title input field
+        setTimeout(() => {
+            document.getElementById('title').focus();
+        }, 100);
     }
 
     function closeModal() {
