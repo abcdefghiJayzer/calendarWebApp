@@ -183,46 +183,52 @@ class GoogleCalendarService
         return $this->client;
     }
 
-    public function useUserTokens(\App\Models\User $user)
+    public function useUserTokens($user)
     {
-        if (empty($user->google_access_token)) {
-            Log::warning('No Google access token available for user', ['user_id' => $user->id]);
+        if (!$user->google_access_token) {
+            \Log::warning('No Google access token found for user', ['user_id' => $user->id]);
             return false;
         }
 
-        try {
-            $client = $this->getClient();
+        $token = json_decode($user->google_access_token, true);
 
-            // Set access token from database
-            $accessToken = json_decode($user->google_access_token, true);
-            $client->setAccessToken($accessToken);
+        // Set the token in the client
+        $this->client->setAccessToken($token);
 
-            // Check if token needs refresh
-            if ($client->isAccessTokenExpired()) {
-                Log::info('Google access token expired, refreshing', ['user_id' => $user->id]);
+        // If token is expired, try to refresh it
+        if ($this->client->isAccessTokenExpired()) {
+            \Log::info('Access token expired, attempting refresh', ['user_id' => $user->id]);
 
-                if ($client->getRefreshToken()) {
-                    $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+            if ($user->google_refresh_token) {
+                // Update the token array with the refresh token
+                $token['refresh_token'] = $user->google_refresh_token;
+                $this->client->setAccessToken($token);
 
-                    // Save the new access token to the database
-                    $user->google_access_token = json_encode($client->getAccessToken());
+                try {
+                    $newToken = $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
+
+                    // Update the token in the database
+                    $user->google_access_token = json_encode($newToken);
                     $user->save();
 
-                    Log::info('Google access token refreshed successfully', ['user_id' => $user->id]);
-                } else {
-                    Log::error('No refresh token available', ['user_id' => $user->id]);
+                    // Update the token in session
+                    session()->put('google_token', $newToken);
+
+                    \Log::info('Token refreshed successfully', ['user_id' => $user->id]);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to refresh token', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
                     return false;
                 }
+            } else {
+                \Log::warning('No refresh token available', ['user_id' => $user->id]);
+                return false;
             }
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error using user tokens: ' . $e->getMessage(), [
-                'user_id' => $user->id,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return false;
         }
+
+        return true;
     }
 
     public function isAuthenticated()

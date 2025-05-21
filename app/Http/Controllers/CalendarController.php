@@ -385,7 +385,7 @@ class CalendarController extends Controller
         return view('edit', compact('event'));
     }
 
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
         try {
             $event = Event::findOrFail($id);
@@ -411,6 +411,7 @@ class CalendarController extends Controller
                 'organizational_unit_ids' => 'nullable|array',
                 'organizational_unit_ids.*' => 'nullable|numeric|exists:organizational_units,id',
                 'force_update' => 'nullable|boolean',
+                'color' => 'nullable|string',
             ]);
 
             // Properly handle the is_all_day checkbox
@@ -422,26 +423,31 @@ class CalendarController extends Controller
             // Determine organizational units based on settings
             $organizationalUnitIds = [];
 
-            // Important: Load existing organizational units from the pivot table first
-            $existingOrgUnitIds = $event->organizationalUnits->pluck('id')->toArray();
+            // Handle global events
+            if ($request->boolean('is_global')) {
+                // For global events, don't associate with any specific unit
+                $organizationalUnitIds = [];
+            } else if ($request->has('organizational_unit_ids')) {
+                // Get all selected organizational units
+                $selectedUnits = \App\Models\OrganizationalUnit::whereIn('id', $request->organizational_unit_ids)->get();
 
-            // Only change organizational units if they were actually included in the request
-            if ($request->has('is_global') || $request->has('organizational_unit_ids')) {
-                if ($request->boolean('is_global')) {
-                    // For global events, don't associate with any specific unit
-                    $organizationalUnitIds = [];
+                // Separate sectors and divisions
+                $sectorIds = $selectedUnits->where('type', 'sector')->pluck('id');
+                $divisionIds = $selectedUnits->where('type', 'division')->pluck('id')->toArray();
+
+                // If sectors were selected, get all their divisions
+                if ($sectorIds->isNotEmpty()) {
+                    $sectorDivisionIds = \App\Models\OrganizationalUnit::whereIn('parent_id', $sectorIds)
+                        ->where('type', 'division')
+                        ->pluck('id')
+                        ->toArray();
+
+                    // Merge all division IDs, removing duplicates
+                    $organizationalUnitIds = array_unique(array_merge($divisionIds, $sectorDivisionIds));
                 } else {
-                    // If not global and organizational unit ids are provided, use them
-                    if ($request->has('organizational_unit_ids')) {
-                        $organizationalUnitIds = $request->organizational_unit_ids ?: [];
-                    } else {
-                        // If no organizational units are provided, keep existing ones
-                        $organizationalUnitIds = $existingOrgUnitIds;
-                    }
+                    // If no sectors were selected, just use the selected divisions
+                    $organizationalUnitIds = $divisionIds;
                 }
-            } else {
-                // If neither is_global nor organizational_unit_ids were provided, keep existing settings
-                $organizationalUnitIds = $existingOrgUnitIds;
             }
 
             // Check for overlapping priority events ONLY if not a priority event AND not forcing update
@@ -472,38 +478,29 @@ class CalendarController extends Controller
                 if ($overlappingEvents->isNotEmpty()) {
                     return response()->json([
                         'success' => false,
-                        'error' => 'This time slot overlaps with priority events. Please choose a different time or contact the event organizers.',
-                        'overlapping_events' => $overlappingEvents->map(function ($event) {
-                            return [
-                                'title' => $event->title,
-                                'start_date' => $event->start_date,
-                                'end_date' => $event->end_date,
-                                'organizational_units' => $event->organizationalUnits->pluck('name')
-                            ];
-                        })->toArray(),
-                        'can_force_update' => true
+                        'error' => 'There are overlapping priority events',
+                        'overlapping_events' => $overlappingEvents
                     ], 422);
                 }
             }
 
-            // Update event details
+            // Get color from request or use the existing event color
             $user = auth()->user();
-            $color = '#616161'; // Default color for division employee
-
-            switch($user->role) {
-                case 'admin':
-                    $color = '#33b679'; // Admin color
-                    break;
-                case 'sector_head':
-                    $color = '#039be5'; // Sector head color
-                    break;
-                case 'division_head':
-                    $color = '#e8b4bc'; // Division head color
-                    break;
-                default:
-                    $color = '#616161'; // Division employee color
+            
+            // For employees, always use grey color
+            if ($user->division !== 'institute' && !$user->is_division_head) {
+                $color = '#616161'; // Division employee color
+            } else {
+                // For other roles, use the color from request or existing color
+                $color = $request->input('color', $event->color);
             }
 
+            // Ensure color is never null
+            if (empty($color)) {
+                $color = '#616161';
+            }
+
+            // Update the event
             $event->update([
                 'title' => $request->title,
                 'description' => $request->description,
@@ -538,70 +535,29 @@ class CalendarController extends Controller
             }
 
             // If this event is connected to Google Calendar, update the Google event as well
-            $googleUpdated = false;
-            if ($event->google_event_id && $this->googleCalendarService->isAuthenticated()) {
+            if ($event->google_event_id) {
                 try {
-                    // Prepare event data for Google Calendar
-                    $googleEventData = [
-                        'title' => $event->title,
-                        'description' => $event->description,
-                        'start_date' => $event->start_date,
-                        'end_date' => $event->end_date ?: $event->start_date, // Use start_date as fallback
-                        'location' => $event->location,
-                        'color' => $event->color,
-                        'guests' => $event->participants->pluck('email')->toArray(),
-                        'is_all_day' => $event->is_all_day
-                    ];
-
-                    // Use user's stored Google credentials from database
-                    $user = auth()->user();
-
-                    // Load and use the Google tokens from the database regardless of session state
-                    $this->googleCalendarService->useUserTokens($user);
-
-                    // Update the Google Calendar event
-                    $this->googleCalendarService->updateEvent($event->google_event_id, $googleEventData);
-                    \Log::info('Google Calendar event updated with local changes', [
-                        'event_id' => $event->id,
-                        'google_event_id' => $event->google_event_id
-                    ]);
-                    $googleUpdated = true;
+                    $this->updateGoogleEvent($request, $event->id);
                 } catch (\Exception $e) {
                     \Log::error('Failed to update Google Calendar event', [
                         'event_id' => $event->id,
-                        'google_event_id' => $event->google_event_id,
                         'error' => $e->getMessage()
                     ]);
-                    // Continue with the response even if Google update fails
-                    // We don't want to prevent updating the local event if Google sync fails
                 }
             }
 
-            if ($request->ajax() || $request->wantsJson()) {
-                $response = [
-                    'success' => true,
-                    'message' => 'Event updated successfully'
-                ];
-
-                if ($event->google_event_id) {
-                    $response['google_synced'] = $googleUpdated;
-                    if (!$googleUpdated) {
-                        $response['google_sync_message'] = 'Note: The event was updated locally, but we couldn\'t sync the changes to Google Calendar.';
-                    }
-                }
-
-                return response()->json($response);
-            }
-
-            return redirect()->route('home')->with('success', 'Event updated successfully!');
+            return response()->json([
+                'success' => true,
+                'message' => 'Event updated successfully',
+                'event' => $event
+            ]);
         } catch (\Exception $e) {
-            \Log::error('Event update error: ' . $e->getMessage());
-
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
-            }
-
-            return redirect()->back()->with('error', 'Failed to update event: ' . $e->getMessage());
+            \Log::error('Error updating event', [
+                'event_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 

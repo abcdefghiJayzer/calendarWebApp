@@ -38,6 +38,10 @@ class LoginController extends Controller
                     // Use the stored tokens from the database
                     $googleCalendarService->useUserTokens($user);
 
+                    // Store the token in session
+                    $token = json_decode($user->google_access_token, true);
+                    session()->put('google_token', $token);
+                    
                     // Create a new request instance for sync
                     $syncRequest = new Request();
                     

@@ -276,7 +276,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
             checkData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
             checkData.append('event_id', eventId); // Add event ID to exclude current event from conflict check
 
-            const checkResponse = await fetch('/OJT/calendarWebApp/check-conflicts', {
+            const checkResponse = await fetch('/check-conflicts', {
                 method: 'POST',
                 body: checkData,
                 headers: {

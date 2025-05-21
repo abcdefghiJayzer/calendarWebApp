@@ -13,6 +13,7 @@
             <form id="edit-event-form" method="POST" class="space-y-5">
                 @csrf
                 <input type="hidden" id="edit-event-id" name="id">
+                <input type="hidden" id="edit-event-color" name="color" value="#616161">
 
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-gray-700">Event Visibility</label>
