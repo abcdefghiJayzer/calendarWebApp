@@ -484,22 +484,6 @@ class CalendarController extends Controller
                 }
             }
 
-            // Get color from request or use the existing event color
-            $user = auth()->user();
-            
-            // For employees, always use grey color
-            if ($user->division !== 'institute' && !$user->is_division_head) {
-                $color = '#616161'; // Division employee color
-            } else {
-                // For other roles, use the color from request or existing color
-                $color = $request->input('color', $event->color);
-            }
-
-            // Ensure color is never null
-            if (empty($color)) {
-                $color = '#616161';
-            }
-
             // Update the event
             $event->update([
                 'title' => $request->title,
@@ -509,8 +493,7 @@ class CalendarController extends Controller
                 'location' => $request->location,
                 'is_all_day' => $isAllDay,
                 'private' => $request->boolean('private'),
-                'is_priority' => $request->boolean('is_priority'),
-                'color' => $color,
+                'is_priority' => $request->boolean('is_priority')
             ]);
 
             // Handle organizational units

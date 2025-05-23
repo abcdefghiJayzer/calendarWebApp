@@ -281,26 +281,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return result.isConfirmed;
     }
 
-    function openEditModal(event) {
-        const modal = document.getElementById('edit-event-modal');
-        const form = document.getElementById('edit-event-form');
-        
-        // Set the event ID
-        document.getElementById('edit-event-id').value = event.id;
-        
-        // Set the color
-        const colorInput = document.getElementById('edit-event-color');
-        const user = window.userInfo;
-        if (user.division !== 'institute' && !user.isDivisionHead) {
-            colorInput.value = '#616161'; // Always grey for employees
-        } else {
-            colorInput.value = event.backgroundColor || '#616161';
-        }
-
-        // Set other form fields
-        // ... existing code ...
-    }
-
     // Modify the form submission handlers
     if (addEventForm) {
         addEventForm.addEventListener('submit', async function(e) {
